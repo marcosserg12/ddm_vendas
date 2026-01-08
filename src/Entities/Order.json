@@ -1,0 +1,127 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "numero_pedido": {
+      "type": "string",
+      "description": "N\u00famero \u00fanico do pedido"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email do comprador"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pendente",
+        "pago",
+        "preparando",
+        "enviado",
+        "entregue",
+        "cancelado"
+      ],
+      "default": "pendente",
+      "description": "Status do pedido"
+    },
+    "itens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "produto_id": {
+            "type": "string"
+          },
+          "produto_nome": {
+            "type": "string"
+          },
+          "num_ddm": {
+            "type": "string"
+          },
+          "imagem_url": {
+            "type": "string"
+          },
+          "quantidade": {
+            "type": "number"
+          },
+          "preco_unitario": {
+            "type": "number"
+          },
+          "subtotal": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Itens do pedido"
+    },
+    "subtotal": {
+      "type": "number",
+      "description": "Subtotal dos produtos"
+    },
+    "frete": {
+      "type": "number",
+      "description": "Valor do frete"
+    },
+    "frete_modalidade": {
+      "type": "string",
+      "description": "Tipo de frete escolhido"
+    },
+    "frete_prazo": {
+      "type": "string",
+      "description": "Prazo de entrega"
+    },
+    "total": {
+      "type": "number",
+      "description": "Valor total do pedido"
+    },
+    "endereco_entrega": {
+      "type": "object",
+      "properties": {
+        "cep": {
+          "type": "string"
+        },
+        "logradouro": {
+          "type": "string"
+        },
+        "numero": {
+          "type": "string"
+        },
+        "complemento": {
+          "type": "string"
+        },
+        "bairro": {
+          "type": "string"
+        },
+        "cidade": {
+          "type": "string"
+        },
+        "estado": {
+          "type": "string"
+        }
+      },
+      "description": "Endere\u00e7o de entrega"
+    },
+    "forma_pagamento": {
+      "type": "string",
+      "enum": [
+        "pix",
+        "boleto",
+        "cartao"
+      ],
+      "description": "Forma de pagamento"
+    },
+    "codigo_rastreio": {
+      "type": "string",
+      "description": "C\u00f3digo de rastreamento"
+    },
+    "observacoes": {
+      "type": "string",
+      "description": "Observa\u00e7\u00f5es do pedido"
+    }
+  },
+  "required": [
+    "numero_pedido",
+    "user_email",
+    "itens",
+    "total"
+  ]
+}

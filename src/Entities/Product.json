@@ -1,0 +1,156 @@
+{
+  "name": "Product",
+  "type": "object",
+  "properties": {
+    "nome": {
+      "type": "string",
+      "description": "Nome do produto"
+    },
+    "num_figura": {
+      "type": "string",
+      "description": "N\u00famero da figura"
+    },
+    "referencia": {
+      "type": "string",
+      "description": "Refer\u00eancia do produto"
+    },
+    "num_ddm": {
+      "type": "string",
+      "description": "SKU DDM do produto"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "sapatas",
+        "coxins_batentes",
+        "protecoes_sanfonadas",
+        "molas",
+        "outros"
+      ],
+      "description": "Categoria do produto"
+    },
+    "marca": {
+      "type": "string",
+      "enum": [
+        "Wacker",
+        "Weber",
+        "Dynapac/Vipart",
+        "Claridon",
+        "Hoffmann",
+        "Mikasa/Multiquip",
+        "Petrotec",
+        "Bomaq",
+        "Komatsu",
+        "Ingersoll-Rand",
+        "Stone",
+        "Pe\u00e7as Motor",
+        "Bombas",
+        "Masalta"
+      ],
+      "description": "Marca compat\u00edvel"
+    },
+    "serie": {
+      "type": "string",
+      "description": "S\u00e9rie do equipamento"
+    },
+    "modelos_compativeis": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Lista de modelos compat\u00edveis"
+    },
+    "imagem_url": {
+      "type": "string",
+      "description": "URL da imagem principal do produto"
+    },
+    "imagens": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "URLs das imagens adicionais do produto"
+    },
+    "preco": {
+      "type": "number",
+      "description": "Pre\u00e7o de venda"
+    },
+    "preco_promocional": {
+      "type": "number",
+      "description": "Pre\u00e7o promocional"
+    },
+    "estoque": {
+      "type": "number",
+      "description": "Quantidade em estoque"
+    },
+    "peso_kg": {
+      "type": "number",
+      "description": "Peso em kg para c\u00e1lculo de frete"
+    },
+    "rosca": {
+      "type": "string"
+    },
+    "diametro_mm": {
+      "type": "string"
+    },
+    "altura": {
+      "type": "string"
+    },
+    "comprimento": {
+      "type": "string"
+    },
+    "diametro_menor": {
+      "type": "string"
+    },
+    "porca": {
+      "type": "string"
+    },
+    "parafuso": {
+      "type": "string"
+    },
+    "dureza": {
+      "type": "string"
+    },
+    "diametro_maior": {
+      "type": "string"
+    },
+    "diametro_interno": {
+      "type": "string"
+    },
+    "diametro_interno_maior": {
+      "type": "string"
+    },
+    "diametro_interno_boca": {
+      "type": "string"
+    },
+    "diametro_interno_boca_maior": {
+      "type": "string"
+    },
+    "diametro_interno_boca_menor": {
+      "type": "string"
+    },
+    "dim_cxlxh": {
+      "type": "string"
+    },
+    "material": {
+      "type": "string"
+    },
+    "cor": {
+      "type": "string"
+    },
+    "destaque": {
+      "type": "boolean"
+    },
+    "ativo": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "nome",
+    "num_ddm",
+    "categoria",
+    "marca",
+    "preco"
+  ]
+}
