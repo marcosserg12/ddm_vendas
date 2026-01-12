@@ -2,11 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Garante que o site ocupe a altura e largura total */
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden; /* Evita rolagem lateral indesejada */
+@layer base {
+  :root {
+    /* Cores customizadas para o ecossistema DDM */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Laranja DDM Industrial */
+    --primary: 24.6 95% 53.1%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Cinza Escuro DDM */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 24.6 95% 53.1%;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    @apply bg-background text-foreground antialiased;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+
+  /* Customização da Barra de Rolagem Industrial */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded-full border-2 border-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-orange-500;
+  }
+}
+
+/* Utilitários Extras para Tipografia Industrial */
+@layer components {
+  .font-industrial-title {
+    @apply font-black uppercase italic tracking-tighter;
+  }
+  
+  .font-industrial-label {
+    @apply font-black uppercase text-[10px] tracking-widest text-gray-400;
+  }
+}
+
+/* Classes de animação para transições de página */
+.animate-in {
+  animation-duration: 500ms;
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

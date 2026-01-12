@@ -11,15 +11,27 @@ const Checkbox = React.forwardRef(({ className, checked, onCheckedChange, ...pro
       onClick={() => onCheckedChange?.(!checked)}
       ref={ref}
       className={cn(
-        "peer h-4 w-4 shrink-0 rounded-sm border border-slate-200 ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-slate-900 data-[state=checked]:text-slate-50",
-        checked ? "bg-black text-white" : "bg-white",
+        // Estilo Base: Bordas mais arredondadas e anel de foco laranja
+        "peer h-5 w-5 shrink-0 rounded-md border-2 border-gray-300 ring-offset-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        // Estado Ativo: Laranja vibrante
+        checked 
+          ? "bg-orange-500 border-orange-500 text-white shadow-sm" 
+          : "bg-white hover:border-orange-300",
         className
       )}
       {...props}
     >
-      {checked && <Check className="h-3 w-3 mx-auto" />}
+      {checked && (
+        <motion.div
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+        >
+            <Check className="h-3.5 w-3.5 mx-auto stroke-[3px]" />
+        </motion.div>
+      )}
     </button>
   )
 })
 Checkbox.displayName = "Checkbox"
+
 export { Checkbox }

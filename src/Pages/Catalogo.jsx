@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
-// CORREÇÃO: Caminho da API
-import { base44 } from '../api/base44Client';
+import { __ddmDatabase } from '../api/MysqlServer.js';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Grid, List, SlidersHorizontal, Package, Loader2 } from 'lucide-react';
-
-// CORREÇÃO: Caminhos dos componentes UI (Maiúscula em Components)
 import { Input } from '../Components/ui/input';
 import { Button } from '../Components/ui/button';
-
-// import { Skeleton } from '@/components/ui/skeleton'; // Removido para não dar erro
 import {
     Select,
     SelectContent,
@@ -16,124 +11,88 @@ import {
     SelectTrigger,
     SelectValue,
 } from "../Components/ui/select";
-
-// CORREÇÃO: Caminhos dos componentes do Catálogo
 import ProductFilters from '../Components/catalog/ProductFilters';
 import ProductCard from '../Components/catalog/ProductCard';
 
 export default function Catalogo() {
     const urlParams = new URLSearchParams(window.location.search);
-    const initialCategoria = urlParams.get('categoria');
-    const initialMarca = urlParams.get('marca');
+    
+    // Agora capturamos IDs numéricos conforme o banco
+    const initialCategoria = urlParams.get('id_categoria');
+    const initialMarca = urlParams.get('id_marca');
 
     const [filters, setFilters] = useState({
-        categoria: initialCategoria || null,
-        marca: initialMarca || null,
-        serie: null,
-        modelo: null
+        id_categoria: initialCategoria ? parseInt(initialCategoria) : null,
+        id_marca: initialMarca ? parseInt(initialMarca) : null,
+        id_serie: null,
+        id_modelo: null
     });
+
     const [searchTerm, setSearchTerm] = useState('');
-    const [sortBy, setSortBy] = useState('nome');
+    const [sortBy, setSortBy] = useState('ds_nome');
     const [viewMode, setViewMode] = useState('grid');
 
-    const { data: products, isLoading } = useQuery({
+    // Busca de produtos sincronizada com o backend
+    const { data: products = [], isLoading } = useQuery({
         queryKey: ['products'],
-        queryFn: () => base44.entities.Product.list(), // .list() simples
-        initialData: []
+        queryFn: () => __ddmDatabase.entities.Produtos.list()
     });
 
-    // Filter products
+    // Lógica de Filtragem no Frontend (Respeitando os IDs do Banco)
     const filteredProducts = products.filter(product => {
-        // Category filter
-        if (filters.categoria && product.categoria !== filters.categoria) return false;
+        if (filters.id_categoria && product.id_categoria !== filters.id_categoria) return false;
+        if (filters.id_marca && product.id_marca !== filters.id_marca) return false;
+        if (filters.id_serie && product.id_serie !== filters.id_serie) return false;
+        if (filters.id_modelo && product.id_modelo !== filters.id_modelo) return false;
 
-        // Brand filter
-        if (filters.marca && product.marca !== filters.marca) return false;
-
-        // Serie filter
-        if (filters.serie && product.serie !== filters.serie) return false;
-
-        // Model filter
-        if (filters.modelo) {
-            if (!product.modelos_compativeis?.includes(filters.modelo)) return false;
-        }
-
-        // Search filter
         if (searchTerm) {
             const search = searchTerm.toLowerCase();
-            const matchesSearch =
-                product.nome?.toLowerCase().includes(search) ||
-                product.num_ddm?.toLowerCase().includes(search) ||
-                product.num_figura?.toLowerCase().includes(search) ||
-                product.modelos_compativeis?.some(m => m.toLowerCase().includes(search));
-            if (!matchesSearch) return false;
+            return (
+                product.ds_nome?.toLowerCase().includes(search) ||
+                product.nu_ddm?.toLowerCase().includes(search) ||
+                product.ds_marca?.toLowerCase().includes(search)
+            );
         }
-
         return true;
     });
 
-    // Sort products
+    // Ordenação Industrial
     const sortedProducts = [...filteredProducts].sort((a, b) => {
-        switch (sortBy) {
-            case 'nome':
-                return (a.nome || '').localeCompare(b.nome || '');
-            case 'num_ddm':
-                return (a.num_ddm || '').localeCompare(b.num_ddm || '');
-            case 'marca':
-                return (a.marca || '').localeCompare(b.marca || '');
-            case 'recente':
-                // Proteção para data
-                const dateA = a.created_date ? new Date(a.created_date) : new Date(0);
-                const dateB = b.created_date ? new Date(b.created_date) : new Date(0);
-                return dateB - dateA;
-            default:
-                return 0;
-        }
+        if (sortBy === 'ds_nome') return (a.ds_nome || '').localeCompare(b.ds_nome || '');
+        if (sortBy === 'nu_ddm') return (a.nu_ddm || '').localeCompare(b.nu_ddm || '');
+        if (sortBy === 'preco_asc') return a.nu_preco_venda_atual - b.nu_preco_venda_atual;
+        if (sortBy === 'preco_desc') return b.nu_preco_venda_atual - a.nu_preco_venda_atual;
+        return 0;
     });
 
     const handleFilterChange = (filterType, value) => {
-        setFilters(prev => ({
-            ...prev,
-            [filterType]: value
-        }));
+        setFilters(prev => ({ ...prev, [filterType]: value }));
     };
 
     const handleClearFilters = () => {
-        setFilters({
-            categoria: null,
-            marca: null,
-            serie: null,
-            modelo: null
-        });
+        setFilters({ id_categoria: null, id_marca: null, id_serie: null, id_modelo: null });
         setSearchTerm('');
     };
 
-    const categoryTitles = {
-        sapatas: 'Sapatas para Compactadores',
-        coxins_batentes: 'Coxins e Batentes',
-        protecoes_sanfonadas: 'Proteções Sanfonadas',
-        molas: 'Molas',
-        outros: 'Outros Produtos'
-    };
-
     return (
-        <div className="bg-gray-50 min-h-screen">
-            {/* Header */}
-            <section className="bg-gray-900 py-12">
-                <div className="max-w-7xl mx-auto px-4">
-                    <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">
-                        {filters.categoria ? categoryTitles[filters.categoria] : 'Catálogo de Produtos'}
+        <div className="bg-gray-50 min-h-screen pb-20">
+            {/* Header Dark DDM */}
+            <section className="bg-gray-900 py-16 border-b-4 border-orange-600">
+                <div className="max-w-7xl mx-auto px-6">
+                    <h1 className="text-4xl md:text-6xl font-black text-white mb-4 uppercase tracking-tighter italic">
+                        Catálogo <span className="text-orange-500">Técnico</span>
                     </h1>
-                    <p className="text-gray-400">
-                        Encontre peças por marca, série e modelo do seu equipamento
+                    <p className="text-gray-400 font-bold uppercase text-xs tracking-[0.3em] max-w-xl">
+                        Componentes de alta performance para compactação e isolamento de vibração.
                     </p>
                 </div>
             </section>
 
-            <div className="max-w-7xl mx-auto px-4 py-8">
-                <div className="flex flex-col lg:flex-row gap-8">
-                    {/* Sidebar Filters */}
-                    <aside className="lg:w-72 flex-shrink-0">
+            <div className="max-w-7xl mx-auto px-6 py-10">
+                <div className="flex flex-col lg:flex-row gap-10">
+                    
+                    {/* Filtros Lateral */}
+                    <aside className="lg:w-80 flex-shrink-0">
                         <ProductFilters
                             filters={filters}
                             onFilterChange={handleFilterChange}
@@ -141,120 +100,73 @@ export default function Catalogo() {
                         />
                     </aside>
 
-                    {/* Main Content */}
+                    {/* Área de Produtos */}
                     <main className="flex-1">
-                        {/* Search and Sort Bar */}
-                        <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
-                            <div className="flex flex-col md:flex-row gap-4">
-                                {/* Search */}
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <Input
-                                        placeholder="Buscar por nome, código DDM ou modelo..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="pl-10 h-11"
-                                    />
-                                </div>
+                        {/* Toolbar de Busca e Ordenação */}
+                        <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-100 p-6 mb-8 flex flex-col md:flex-row gap-4 items-center">
+                            <div className="relative flex-1 w-full">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Input
+                                    placeholder="Buscar por descrição, código DDM ou marca..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-12 h-12 border-gray-100 bg-gray-50 focus-visible:ring-orange-500 font-bold text-xs"
+                                />
+                            </div>
 
-                                {/* Sort */}
-                                <div className="flex gap-3">
-                                    <Select value={sortBy} onValueChange={setSortBy}>
-                                        <SelectTrigger className="w-44 h-11">
-                                            <SlidersHorizontal className="w-4 h-4 mr-2" />
-                                            <SelectValue placeholder="Ordenar por" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="nome">Nome (A-Z)</SelectItem>
-                                            <SelectItem value="num_ddm">Código DDM</SelectItem>
-                                            <SelectItem value="marca">Marca</SelectItem>
-                                            <SelectItem value="recente">Mais Recentes</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                            <div className="flex gap-3 w-full md:w-auto">
+                                <Select value={sortBy} onValueChange={setSortBy}>
+                                    <SelectTrigger className="w-full md:w-56 h-12 border-2 border-gray-100 font-black uppercase text-[10px] tracking-widest">
+                                        <SlidersHorizontal className="w-3 h-3 mr-2 text-orange-500" />
+                                        <SelectValue placeholder="Ordenar" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ds_nome">Nome (A-Z)</SelectItem>
+                                        <SelectItem value="nu_ddm">Código DDM</SelectItem>
+                                        <SelectItem value="preco_asc">Menor Preço</SelectItem>
+                                        <SelectItem value="preco_desc">Maior Preço</SelectItem>
+                                    </SelectContent>
+                                </Select>
 
-                                    {/* View Toggle */}
-                                    <div className="hidden sm:flex border rounded-lg">
-                                        <Button
-                                            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                                            size="icon"
-                                            className="rounded-r-none"
-                                            onClick={() => setViewMode('grid')}
-                                        >
-                                            <Grid className="w-4 h-4" />
-                                        </Button>
-                                        <Button
-                                            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                                            size="icon"
-                                            className="rounded-l-none"
-                                            onClick={() => setViewMode('list')}
-                                        >
-                                            <List className="w-4 h-4" />
-                                        </Button>
-                                    </div>
+                                <div className="hidden sm:flex border-2 border-gray-100 rounded-xl overflow-hidden">
+                                    <Button
+                                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                                        size="icon"
+                                        className="rounded-none h-12 w-12"
+                                        onClick={() => setViewMode('grid')}
+                                    >
+                                        <Grid className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                        variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                                        size="icon"
+                                        className="rounded-none h-12 w-12"
+                                        onClick={() => setViewMode('list')}
+                                    >
+                                        <List className="w-4 h-4" />
+                                    </Button>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Active Filters */}
-                        {(filters.marca || filters.serie || filters.modelo || filters.categoria) && (
-                            <div className="flex flex-wrap gap-2 mb-6 pt-4 border-t">
-                                <span className="text-sm text-gray-500">Filtros ativos:</span>
-                                {filters.categoria && (
-                                    <span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-medium">
-                                        {categoryTitles[filters.categoria]}
-                                    </span>
-                                )}
-                                {filters.marca && (
-                                    <span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-medium">
-                                        {filters.marca}
-                                    </span>
-                                )}
-                                {filters.serie && (
-                                    <span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-medium">
-                                        Série: {filters.serie}
-                                    </span>
-                                )}
-                                {filters.modelo && (
-                                    <span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-medium">
-                                        Modelo: {filters.modelo}
-                                    </span>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Results Count */}
-                        <div className="mb-6">
-                            <p className="text-gray-600">
-                                <span className="font-semibold text-gray-900">{sortedProducts.length}</span> produtos encontrados
-                            </p>
-                        </div>
-
-                        {/* Products Grid */}
+                        {/* Estado de Carregamento */}
                         {isLoading ? (
-                            <div className="w-full h-64 flex flex-col items-center justify-center text-gray-500">
-                                <Loader2 className="w-10 h-10 animate-spin text-orange-500 mb-4" />
-                                <p>Carregando catálogo...</p>
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                <Loader2 className="w-12 h-12 animate-spin text-orange-500 mb-4" />
+                                <p className="font-black uppercase text-[10px] tracking-widest">Acessando Banco de Dados DDM...</p>
                             </div>
                         ) : sortedProducts.length > 0 ? (
-                            <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
+                            <div className={`grid gap-8 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'}`}>
                                 {sortedProducts.map((product) => (
-                                    <ProductCard key={product.id} product={product} />
+                                    <ProductCard key={product.id_produto} product={product} />
                                 ))}
                             </div>
                         ) : (
-                            <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
-                                <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                                    Nenhum produto encontrado
-                                </h3>
-                                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                                    Tente ajustar os filtros ou realizar uma nova busca.
-                                    Se não encontrar o que procura, entre em contato conosco.
-                                </p>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleClearFilters}
-                                >
+                            <div className="bg-white rounded-3xl border-2 border-dashed border-gray-200 py-20 text-center">
+                                <Package className="w-20 h-20 text-gray-100 mx-auto mb-6" />
+                                <h3 className="text-xl font-black text-gray-900 uppercase italic mb-2">Sem resultados</h3>
+                                <p className="text-gray-400 text-xs font-bold uppercase mb-8">Não encontramos peças para esses filtros.</p>
+                                <Button variant="outline" onClick={handleClearFilters} className="border-2 font-black uppercase text-[10px] tracking-widest">
                                     Limpar Filtros
                                 </Button>
                             </div>

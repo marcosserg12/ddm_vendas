@@ -1,22 +1,20 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-// REMOVIDO: createPageUrl
-import { base44 } from '../api/base44Client';
+import { Link, useNavigate } from 'react-router-dom';
+import { __ddmDatabase, getFullImageUrl } from '../api/MysqlServer.js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ShoppingCart, ArrowLeft, Check, Minus, Plus,
-  Package, Truck, Shield, RotateCcw, Loader2
+    ShoppingCart, ArrowLeft, Check, Minus, Plus,
+    Package, Truck, Shield, RotateCcw, Loader2, Info
 } from 'lucide-react';
 import { Button } from '../Components/ui/button';
 import { Badge } from '../Components/ui/badge';
-// Trocado Skeleton por Loader2 para simplificar
 import { toast } from 'sonner';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "../Components/ui/select";
 
 import ProductPrice from '../Components/product/ProductPrice';
@@ -26,320 +24,230 @@ import MobileStickyBuy from '../Components/product/MobileStickyBuy';
 import ResponsiveSpecsTable from '../Components/product/ResponsiveSpecsTable';
 
 export default function Produto() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const productId = urlParams.get('id');
-  const [quantity, setQuantity] = useState(1);
-  const [addedToCart, setAddedToCart] = useState(false);
-  const [selectedShipping, setSelectedShipping] = useState(null);
-  const queryClient = useQueryClient();
+    const navigate = useNavigate();
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
+    
+    const [quantity, setQuantity] = useState(1);
+    const [addedToCart, setAddedToCart] = useState(false);
+    const [selectedShipping, setSelectedShipping] = useState(null);
+    const queryClient = useQueryClient();
 
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      const isAuth = await base44.auth.isAuthenticated();
-      if (isAuth) return base44.auth.me();
-      return null;
-    }
-  });
+    // 1. Busca Dados do Produto no MySQL
+    const { data: product, isLoading } = useQuery({
+        queryKey: ['product', productId],
+        queryFn: async () => {
+            const list = await __ddmDatabase.entities.Produtos.list();
+            return list.find(p => String(p.id_produto) === String(productId)) || null;
+        },
+        enabled: !!productId
+    });
 
-  const { data: product, isLoading } = useQuery({
-    queryKey: ['product', productId],
-    queryFn: async () => {
-      // Ajuste para .list().find() para compatibilidade
-      const products = await base44.entities.Product.list();
-      return products.find(p => String(p.id) === String(productId)) || null;
-    },
-    enabled: !!productId
-  });
+    // 2. Lógica de Adicionar ao Carrinho (Integrado com LocalStorage/Session)
+    const addToCartMutation = useMutation({
+        mutationFn: async () => {
+            const cartItem = {
+                id_produto: product.id_produto,
+                ds_nome: product.ds_nome,
+                nu_ddm: product.nu_ddm,
+                url_imagem: product.url_imagem_principal,
+                quantidade: quantity,
+                nu_preco: product.nu_preco_venda_atual,
+                nu_peso: product.nu_peso_kg || 0.5
+            };
 
-  const addToCartMutation = useMutation({
-    mutationFn: async () => {
-      const cartData = {
-        produto_id: product.id,
-        produto_nome: product.nome,
-        num_ddm: product.num_ddm,
-        imagem_url: product.imagem_url,
-        quantidade: quantity,
-        preco_unitario: product.preco_promocional || product.preco,
-        peso_kg: product.peso_kg || 0.5
-      };
+            // Pegamos o carrinho atual do localStorage
+            const currentCart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
+            
+            // Verificamos se o item já existe
+            const existingIndex = currentCart.findIndex(item => item.id_produto === product.id_produto);
+            
+            if (existingIndex > -1) {
+                currentCart[existingIndex].quantidade += quantity;
+            } else {
+                currentCart.push(cartItem);
+            }
 
-      // Mock de lógica de carrinho
-      const allCartItems = await base44.entities.CartItem.list();
-
-      if (user?.email) {
-        cartData.user_email = user.email;
-        const existingItems = allCartItems.filter(item =>
-            item.user_email === user.email && item.produto_id === product.id
-        );
-        if (existingItems.length > 0) {
-          await base44.entities.CartItem.update(existingItems[0].id, {
-            quantidade: existingItems[0].quantidade + quantity
-          });
-        } else {
-          await base44.entities.CartItem.create(cartData);
+            localStorage.setItem('ddm_cart', JSON.stringify(currentCart));
+            // Dispara evento para o Header atualizar o contador
+            window.dispatchEvent(new Event('cartUpdated'));
+            
+            await new Promise(resolve => setTimeout(resolve, 500)); // Simula latência
+            return true;
+        },
+        onSuccess: () => {
+            setAddedToCart(true);
+            toast.success('Peça adicionada ao orçamento!');
+            setTimeout(() => setAddedToCart(false), 2000);
+            queryClient.invalidateQueries({ queryKey: ['cartItems'] });
         }
-      } else {
-        const sessionId = localStorage.getItem('ddm_session') ||
-          `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('ddm_session', sessionId);
-        cartData.session_id = sessionId;
+    });
 
-        const existingItems = allCartItems.filter(item =>
-            item.session_id === sessionId && item.produto_id === product.id
+    const handleBuyNow = async () => {
+        await addToCartMutation.mutateAsync();
+        navigate('/carrinho');
+    };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+                <Loader2 className="w-10 h-10 animate-spin text-orange-500 mb-4" />
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Carregando Especificações</p>
+            </div>
         );
-        if (existingItems.length > 0) {
-          await base44.entities.CartItem.update(existingItems[0].id, {
-            quantidade: existingItems[0].quantidade + quantity
-          });
-        } else {
-          await base44.entities.CartItem.create(cartData);
-        }
-      }
-
-      window.dispatchEvent(new Event('cartUpdated'));
-    },
-    onSuccess: () => {
-      setAddedToCart(true);
-      toast.success('Produto adicionado ao carrinho!');
-      setTimeout(() => setAddedToCart(false), 2000);
-      queryClient.invalidateQueries({ queryKey: ['cartItems'] });
     }
-  });
 
-  const handleBuyNow = async () => {
-    await addToCartMutation.mutateAsync();
-    window.location.href = '/carrinho';
-  };
+    if (!product) {
+        return (
+            <div className="min-h-screen py-20 bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h1 className="text-xl font-black uppercase italic tracking-tighter">Produto não catalogado</h1>
+                    <Button asChild className="mt-6 bg-orange-500"><Link to="/catalogo">Voltar ao Catálogo</Link></Button>
+                </div>
+            </div>
+        );
+    }
 
-  if (isLoading) {
+    const inStock = product.st_ativo === 'S';
+
     return (
-      <div className="bg-gray-50 min-h-screen py-8 flex items-center justify-center">
-         <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-      </div>
-    );
-  }
-
-  if (!product) {
-    return (
-      <div className="bg-gray-50 min-h-screen py-20">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <Package className="w-20 h-20 text-gray-300 mx-auto mb-6" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Produto não encontrado</h1>
-          <p className="text-gray-600 mb-6">O produto que você procura não existe ou foi removido.</p>
-          <Link to="/catalogo">
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Voltar ao Catálogo
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const inStock = (product.estoque || 0) > 0;
-
-  return (
-    <div className="bg-gray-50 min-h-screen">
-      {/* Breadcrumb */}
-      <div className="bg-white border-b">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <Link
-            to="/catalogo"
-            className="inline-flex items-center text-gray-600 hover:text-orange-500 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar ao Catálogo
-          </Link>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          <div className="grid lg:grid-cols-2 gap-0">
-            {/* Product Image Gallery */}
-            <ProductImageGallery
-              mainImage={product.imagem_url}
-              images={product.imagens || []}
-              productName={product.nome}
-              marca={product.marca}
-              inStock={inStock}
-            />
-
-            {/* Product Info */}
-            <div className="p-4 md:p-8 lg:p-10">
-              {/* Header Info */}
-              <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4 md:mb-6">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Nº Figura</p>
-                  <p className="font-bold text-gray-900 text-sm">{product.num_figura || '--'}</p>
+        <div className="bg-white min-h-screen pb-12">
+            {/* Navegação Superior */}
+            <div className="border-b bg-gray-50/50">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+                    <Link to="/catalogo" className="flex items-center text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-orange-600 transition-colors">
+                        <ArrowLeft className="w-4 h-4 mr-2" /> Voltar para Peças
+                    </Link>
+                    <Badge variant="outline" className="border-gray-200 text-gray-400 font-black uppercase text-[9px] tracking-widest">
+                        Ref: {product.ds_referencia || 'N/A'}
+                    </Badge>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-1">Referência</p>
-                  <p className="font-bold text-gray-900 text-sm">{product.referencia || '--'}</p>
-                </div>
-                <div className="bg-orange-50 rounded-lg p-3">
-                  <p className="text-xs text-orange-600 mb-1">Cód. DDM</p>
-                  <p className="font-bold text-orange-600 text-sm">{product.num_ddm}</p>
-                </div>
-              </div>
+            </div>
 
-              {/* COMPATIBILIDADE */}
-              {product.modelos_compativeis && product.modelos_compativeis.length > 0 && (
-                <div className="mb-6 bg-white border-2 border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-500 tracking-wider mb-3">
-                    COMPATIBILIDADE (MÁQUINA)
-                  </p>
-                  <Select>
-                    <SelectTrigger className="w-full h-12 bg-white border-2 border-gray-300 text-gray-900 font-medium text-base hover:border-orange-400 focus:border-orange-500 transition-colors">
-                      <SelectValue placeholder={`Selecione - ${product.modelos_compativeis.length} modelos compatíveis`} />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white">
-                      {product.modelos_compativeis.map((modelo) => (
-                        <SelectItem
-                          key={modelo}
-                          value={modelo}
-                          className="py-3 text-base font-medium text-gray-900 hover:bg-orange-50"
-                        >
-                          {modelo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-gray-400 mt-2">
-                    Marca: {product.marca} {product.serie && `| Série: ${product.serie}`}
-                  </p>
-                </div>
-              )}
-
-              {/* Product Title Banner */}
-              <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-xl mb-6">
-                <h1 className="text-lg lg:text-xl font-bold">{product.nome}</h1>
-                {product.serie && (
-                  <p className="text-orange-100 text-sm mt-1">Série: {product.serie}</p>
-                )}
-              </div>
-
-              {/* Price */}
-              <div className="mb-6">
-                <ProductPrice
-                  preco={product.preco}
-                  precoPromocional={product.preco_promocional}
-                  size="lg"
-                />
-              </div>
-
-              {/* Quantity and Buttons - Desktop Only */}
-              {inStock && (
-                <div className="hidden lg:block">
-                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                    <div className="flex items-center border rounded-lg">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="h-14 w-14"
-                      >
-                        <Minus className="w-5 h-5" />
-                      </Button>
-                      <span className="w-14 text-center font-semibold text-lg">{quantity}</span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="h-14 w-14"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </Button>
+            <div className="max-w-7xl mx-auto px-6 py-8">
+                <div className="grid lg:grid-cols-2 gap-12">
+                    
+                    {/* Galeria com Visual Industrial */}
+                    <div className="space-y-4">
+                        <ProductImageGallery
+                            mainImage={getFullImageUrl(product.url_imagem_principal)}
+                            images={[]} // Pode ser expandido se houver tb_produto_imagens
+                            productName={product.ds_nome}
+                            marca={product.ds_marca}
+                            inStock={inStock}
+                        />
+                        <div className="bg-gray-900 text-white p-6 rounded-3xl flex items-center gap-4">
+                            <Info className="text-orange-500 w-6 h-6 shrink-0" />
+                            <p className="text-[10px] font-bold uppercase leading-relaxed tracking-tight text-gray-300">
+                                Esta peça é produzida seguindo rigorosos padrões de dureza e resistência mecânica, garantindo compatibilidade total com {product.ds_marca}.
+                            </p>
+                        </div>
                     </div>
 
-                    <Button
-                      className={`flex-1 h-14 text-base font-bold transition-all ${
-                        addedToCart
-                          ? 'bg-green-500 hover:bg-green-600'
-                          : 'bg-orange-500 hover:bg-orange-600'
-                      }`}
-                      onClick={() => addToCartMutation.mutate()}
-                      disabled={addToCartMutation.isPending}
-                    >
-                      {addedToCart ? (
-                        <>
-                          <Check className="w-5 h-5 mr-2" />
-                          ADICIONADO!
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="w-5 h-5 mr-2" />
-                          COMPRAR
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                    {/* Lado das Informações e Compra */}
+                    <div className="flex flex-col">
+                        <div className="mb-8">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Badge className="bg-orange-500 text-white font-black italic tracking-tighter rounded-lg">DDM ORIGINAL</Badge>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Cód: {product.nu_ddm}</span>
+                            </div>
+                            <h1 className="text-3xl md:text-5xl font-black text-gray-900 uppercase italic tracking-tighter leading-[0.9] mb-4">
+                                {product.ds_nome}
+                            </h1>
+                            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Fabricante: {product.ds_marca} | Série: {product.ds_serie || 'Universal'}</p>
+                        </div>
 
-                  <Button
-                    variant="outline"
-                    className="w-full h-14 text-base font-semibold border-orange-500 text-orange-600 hover:bg-orange-50"
-                    onClick={handleBuyNow}
-                  >
-                    Comprar Agora
-                  </Button>
-                </div>
-              )}
+                        {/* Bloco de Preço */}
+                        <div className="bg-gray-50 p-8 rounded-[2rem] border-2 border-gray-100 mb-8">
+                            <ProductPrice
+                                preco={product.nu_preco_venda_atual}
+                                precoPromocional={null}
+                                size="lg"
+                            />
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-4">Venda sujeita a disponibilidade de estoque técnico</p>
+                        </div>
 
-              {/* Shipping Calculator */}
-              <div className="mt-6">
-                <ShippingCalculator
-                  weightKg={product.peso_kg || 0.5}
-                  onSelectShipping={setSelectedShipping}
-                  selectedShipping={selectedShipping}
-                />
-              </div>
+                        {/* Ações de Compra */}
+                        {inStock ? (
+                            <div className="space-y-4">
+                                <div className="flex gap-4">
+                                    <div className="flex items-center bg-white border-2 border-gray-100 rounded-2xl px-2">
+                                        <Button variant="ghost" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="hover:bg-transparent"><Minus className="w-4 h-4"/></Button>
+                                        <span className="w-10 text-center font-black">{quantity}</span>
+                                        <Button variant="ghost" size="icon" onClick={() => setQuantity(quantity + 1)} className="hover:bg-transparent"><Plus className="w-4 h-4"/></Button>
+                                    </div>
+                                    <Button 
+                                        onClick={() => addToCartMutation.mutate()}
+                                        disabled={addToCartMutation.isPending}
+                                        className={`flex-1 h-16 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all ${
+                                            addedToCart ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-900 hover:bg-black'
+                                        }`}
+                                    >
+                                        {addedToCart ? <Check className="mr-2"/> : <ShoppingCart className="mr-2 w-4 h-4"/>}
+                                        {addedToCart ? 'Adicionado' : 'Adicionar ao Orçamento'}
+                                    </Button>
+                                </div>
+                                <Button 
+                                    onClick={handleBuyNow}
+                                    className="w-full h-16 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-orange-500/20"
+                                >
+                                    Finalizar Compra Agora
+                                </Button>
+                            </div>
+                        ) : (
+                            <Badge className="bg-red-50 text-red-600 p-4 rounded-xl border-none font-black uppercase text-center w-full">Indisponível no Momento</Badge>
+                        )}
 
-              {/* Trust Badges */}
-              <div className="mt-6 grid grid-cols-3 gap-3">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <Truck className="w-5 h-5 mx-auto text-orange-500 mb-1" />
-                  <p className="text-xs text-gray-600">Entrega Rápida</p>
+                        {/* Calculadora de Frete Industrial */}
+                        <div className="mt-10 pt-10 border-t border-gray-100">
+                            <ShippingCalculator
+                                weightKg={product.nu_peso_kg || 0.5}
+                                onSelectShipping={setSelectedShipping}
+                                selectedShipping={selectedShipping}
+                            />
+                        </div>
+
+                        {/* Selos de Confiança */}
+                        <div className="mt-10 grid grid-cols-3 gap-4">
+                            <TrustBadge icon={Truck} label="Envio Express" />
+                            <TrustBadge icon={Shield} label="Garantia Técnica" />
+                            <TrustBadge icon={RotateCcw} label="Devolução 7d" />
+                        </div>
+                    </div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <Shield className="w-5 h-5 mx-auto text-orange-500 mb-1" />
-                  <p className="text-xs text-gray-600">Compra Segura</p>
+
+                {/* Tabela de Especificações - tb_produtos possui campos como ds_material, ds_dimensoes, etc */}
+                <div className="mt-20">
+                    <div className="flex items-center gap-4 mb-8">
+                        <div className="h-px bg-gray-100 flex-1" />
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter text-gray-900">Ficha <span className="text-orange-500">Técnica</span></h2>
+                        <div className="h-px bg-gray-100 flex-1" />
+                    </div>
+                    <ResponsiveSpecsTable product={product} />
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <RotateCcw className="w-5 h-5 mx-auto text-orange-500 mb-1" />
-                  <p className="text-xs text-gray-600">Garantia 30 dias</p>
-                </div>
-              </div>
             </div>
-          </div>
 
-          {/* Technical Specifications */}
-          <div className="border-t">
-            <div className="p-4 md:p-8 lg:p-10">
-              <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-4 md:mb-6">
-                Especificações Técnicas
-              </h2>
-              <ResponsiveSpecsTable product={product} />
-            </div>
-          </div>
+            {/* Sticky Mobile (Opcional) */}
+            <MobileStickyBuy
+                product={product}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                onAddToCart={() => addToCartMutation.mutate()}
+                onBuyNow={handleBuyNow}
+                isAdding={addToCartMutation.isPending}
+                addedToCart={addedToCart}
+                inStock={inStock}
+            />
         </div>
-      </div>
+    );
+}
 
-      {/* Mobile Sticky Buy Button */}
-      <MobileStickyBuy
-        product={product}
-        quantity={quantity}
-        setQuantity={setQuantity}
-        onAddToCart={() => addToCartMutation.mutate()}
-        onBuyNow={handleBuyNow}
-        isAdding={addToCartMutation.isPending}
-        addedToCart={addedToCart}
-        inStock={inStock}
-      />
-
-      {/* Spacer for mobile sticky button */}
-      <div className="h-32 lg:hidden" />
-    </div>
-  );
+function TrustBadge({ icon: Icon, label }) {
+    return (
+        <div className="flex flex-col items-center p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-gray-100 transition-colors">
+            <Icon className="w-5 h-5 text-orange-500 mb-2" />
+            <span className="text-[9px] font-black uppercase tracking-tight text-gray-400 text-center">{label}</span>
+        </div>
+    );
 }

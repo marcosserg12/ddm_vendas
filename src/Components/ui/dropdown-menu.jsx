@@ -5,7 +5,6 @@ const DropdownMenu = ({ children }) => {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Fecha ao clicar fora
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -19,20 +18,24 @@ const DropdownMenu = ({ children }) => {
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
       {React.Children.map(children, (child) =>
-        React.cloneElement(child, { open, setOpen })
+        React.isValidElement(child) ? React.cloneElement(child, { open, setOpen }) : child
       )}
     </div>
   );
 };
 
 const DropdownMenuTrigger = ({ asChild, children, setOpen, open }) => {
-  const Comp = asChild ? React.Slot : "button";
-  // Se for asChild, clonamos o elemento filho e adicionamos o onClick
+  const handleClick = (e) => {
+    e.preventDefault();
+    setOpen(!open);
+  };
+
   if (asChild && React.isValidElement(children)) {
-      return React.cloneElement(children, { onClick: () => setOpen(!open) });
+    return React.cloneElement(children, { onClick: handleClick });
   }
+
   return (
-    <button onClick={() => setOpen(!open)} type="button">
+    <button onClick={handleClick} type="button" className="focus:outline-none">
       {children}
     </button>
   );
@@ -50,11 +53,11 @@ const DropdownMenuContent = ({ align = "center", children, className, open, setO
   return (
     <div
       className={cn(
-        "absolute z-50 mt-2 min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-slate-950 shadow-md animate-in fade-in-0 zoom-in-95",
+        "absolute z-[100] mt-2 min-w-[12rem] overflow-hidden rounded-xl border border-gray-200 bg-white p-1.5 text-gray-950 shadow-xl animate-in fade-in-0 zoom-in-95 duration-200",
         alignmentClasses[align],
         className
       )}
-      onClick={() => setOpen(false)} // Fecha ao clicar em um item
+      onClick={() => setOpen(false)}
     >
       {children}
     </div>
@@ -62,28 +65,20 @@ const DropdownMenuContent = ({ align = "center", children, className, open, setO
 };
 
 const DropdownMenuItem = ({ asChild, className, children, onClick, ...props }) => {
-    const Comp = asChild ? "div" : "button"; // Simplificação para não precisar de Slot
+  const itemClasses = cn(
+    "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm font-bold text-gray-700 outline-none transition-all hover:bg-orange-50 hover:text-orange-600 active:scale-[0.98] w-full text-left",
+    className
+  );
 
-    // Se for asChild (Link), renderizamos o filho diretamente com as classes
-    if (asChild && React.isValidElement(children)) {
-        return React.cloneElement(children, {
-            className: cn(
-                "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 hover:text-slate-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-left",
-                className
-            ),
-            ...props
-        });
-    }
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children, {
+      className: cn(itemClasses, children.props.className),
+      ...props
+    });
+  }
 
   return (
-    <button
-      className={cn(
-        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 hover:text-slate-900 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 w-full text-left",
-        className
-      )}
-      onClick={onClick}
-      {...props}
-    >
+    <button className={itemClasses} onClick={onClick} {...props}>
       {children}
     </button>
   );

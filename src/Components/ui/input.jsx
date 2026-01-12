@@ -6,7 +6,15 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
     <input
       type={type}
       className={cn(
-        "flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        // Base: Altura levemente maior (h-11) para melhor usabilidade mobile
+        // Borda cinza média para contraste em fundos brancos ou cinzas
+        "flex h-11 w-full rounded-xl border-2 border-gray-200 bg-white px-4 py-2 text-sm ring-offset-white transition-all",
+        // Placeholder
+        "placeholder:text-gray-400 font-medium",
+        // Foco: Laranja DDM com anel suave
+        "focus-visible:outline-none focus-visible:border-orange-500 focus-visible:ring-4 focus-visible:ring-orange-500/10",
+        // Estados desativados e arquivos
+        "file:border-0 file:bg-transparent file:text-sm file:font-bold disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-50",
         className
       )}
       ref={ref}
@@ -15,4 +23,5 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
   )
 })
 Input.displayName = "Input"
+
 export { Input }

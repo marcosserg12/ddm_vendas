@@ -1,296 +1,269 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { base44 } from './api/base44Client';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { __ddmDatabase } from './api/MysqlServer.js';
 import {
-  Menu, Phone, Mail, MapPin, ShoppingCart,
-  ChevronDown, Factory, Wrench, Shield, Clock, User, LogOut
+    Menu, Phone, Mail, MapPin, ShoppingCart,
+    ChevronDown, Factory, Wrench, Shield, Clock, User, LogOut, ChevronRight
 } from 'lucide-react';
 import { Button } from './Components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
 } from "./Components/ui/dropdown-menu";
 import MobileDrawer from './Components/layout/MobileDrawer';
 
 export default function Layout({ children }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
-  const [scrolled, setScrolled] = useState(false);
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [cartCount, setCartCount] = useState(0);
+    const [scrolled, setScrolled] = useState(false);
+    const [user, setUser] = useState(null);
 
-  const location = useLocation();
+    const location = useLocation();
+    const navigate = useNavigate();
 
-  const getPageName = (path) => {
-      if (path === '/') return 'Home';
-      if (path.startsWith('/catalogo')) return 'Catalogo';
-      if (path.startsWith('/quem-somos')) return 'QuemSomos';
-      if (path.startsWith('/contato')) return 'Contato';
-      return '';
-  };
-  const currentPageName = getPageName(location.pathname);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const loadCartCount = async () => {
-      try {
-        const sessionId = localStorage.getItem('ddm_session') ||
-          `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('ddm_session', sessionId);
-
-        const allItems = await base44.entities.CartItem.list();
-        const items = allItems.filter(i => i.session_id === sessionId);
-        setCartCount(items.reduce((sum, item) => sum + item.quantidade, 0));
-      } catch (e) { }
-    };
-    loadCartCount();
-
-    window.addEventListener('cartUpdated', loadCartCount);
-    return () => window.removeEventListener('cartUpdated', loadCartCount);
-  }, []);
-
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const isAuth = await base44.auth.isAuthenticated();
-        if (isAuth) {
-          const userData = await base44.auth.me();
-          setUser(userData);
+    // Sincroniza o usuário logado via LocalStorage (JWT)
+    useEffect(() => {
+        const storedUser = localStorage.getItem('ddm_user');
+        if (storedUser) {
+            setUser(JSON.parse(storedUser));
         }
-      } catch (e) {}
+    }, []);
+
+    // Monitora o scroll para efeitos no header
+    useEffect(() => {
+        const handleScroll = () => setScrolled(window.scrollY > 20);
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // Atualiza contador do carrinho baseado no localStorage
+    const loadCartCount = () => {
+        const cart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
+        const count = cart.reduce((sum, item) => sum + item.quantidade, 0);
+        setCartCount(count);
     };
-    loadUser();
-  }, []);
 
-  const navLinks = [
-    { name: 'Início', path: '/' },
-    { name: 'Catálogo', path: '/catalogo', dropdown: [
-      { name: 'Sapatas para Compactadores', category: 'sapatas' },
-      { name: 'Coxins e Batentes', category: 'coxins_batentes' },
-      { name: 'Proteções Sanfonadas', category: 'protecoes_sanfonadas' },
-      { name: 'Molas', category: 'molas' },
-    ]},
-    { name: 'Quem Somos', path: '/quem-somos' },
-    { name: 'Contato', path: '/contato' },
-  ];
+    useEffect(() => {
+        loadCartCount();
+        window.addEventListener('cartUpdated', loadCartCount);
+        return () => window.removeEventListener('cartUpdated', loadCartCount);
+    }, []);
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" dir="ltr">
-      <style>{`
-        :root {
-          --ddm-orange: #F97316;
-          --ddm-orange-dark: #EA580C;
-          --ddm-gray: #1F2937;
-          --ddm-gray-light: #6B7280;
-        }
-      `}</style>
+    const handleLogout = () => {
+        localStorage.removeItem('ddm_token');
+        localStorage.removeItem('ddm_user');
+        setUser(null);
+        navigate('/login');
+    };
 
-      {/* Top Bar */}
-      <div className="bg-gray-900 text-white py-2 text-sm hidden md:block">
-        <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <span className="flex items-center gap-2">
-              <Phone className="w-3.5 h-3.5 text-orange-500" />
-              (31) 3621-0000
-            </span>
-            <span className="flex items-center gap-2">
-              <Mail className="w-3.5 h-3.5 text-orange-500" />
-              contato@ddmindustria.com.br
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-orange-500" />
-            Vespasiano-MG
-          </div>
-        </div>
-      </div>
+    const navLinks = [
+        { name: 'Início', path: '/' },
+        { 
+            name: 'Catálogo', 
+            path: '/catalogo', 
+            dropdown: [
+                { name: 'Sapatas para Compactadores', id: 1 },
+                { name: 'Coxins e Batentes', id: 2 },
+                { name: 'Proteções Sanfonadas', id: 3 },
+                { name: 'Molas de Borracha', id: 4 },
+            ]
+        },
+        { name: 'Quem Somos', path: '/quem-somos' },
+        { name: 'Contato', path: '/contato' },
+    ];
 
-      {/* Main Header */}
-      <header className={`sticky top-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-white shadow-lg' : 'bg-white/95 backdrop-blur-sm'
-      }`}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-20">
-            {/* Logo */}
-            <Link to="/" className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
-                <Factory className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-gray-900 tracking-tight">DDM</span>
-                <p className="text-xs text-gray-500 -mt-1">Indústria e Comércio</p>
-              </div>
-            </Link>
+    return (
+        <div className="min-h-screen bg-white flex flex-col font-sans">
+            {/* Top Bar Industrial */}
+            <div className="bg-gray-900 text-white py-2.5 text-[10px] font-black uppercase tracking-widest hidden md:block border-b border-white/5">
+                <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+                    <div className="flex items-center gap-8">
+                        <span className="flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                            <Phone className="w-3 h-3 text-orange-500" /> (31) 3621-0000
+                        </span>
+                        <span className="flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity">
+                            <Mail className="w-3 h-3 text-orange-500" /> vendas@ddmindustria.com.br
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-80 italic">
+                        <MapPin className="w-3 h-3 text-orange-500" /> Vespasiano - MG | Unidade Industrial
+                    </div>
+                </div>
+            </div>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center gap-1">
-              {navLinks.map((link) => (
-                link.dropdown ? (
-                  <DropdownMenu key={link.name}>
-                    <DropdownMenuTrigger asChild>
-                      <button className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-1 ${
-                        location.pathname.startsWith(link.path) && link.path !== '/'
-                          ? 'text-orange-600 bg-orange-50'
-                          : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
-                      }`}>
-                        {link.name}
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
-                      <DropdownMenuItem asChild>
-                        <Link to="/catalogo" className="cursor-pointer">
-                          Ver Todos os Produtos
+            {/* Header Principal */}
+            <header className={`sticky top-0 z-50 transition-all duration-300 ${
+                scrolled ? 'bg-white shadow-xl py-2' : 'bg-white/95 backdrop-blur-md py-4'
+            }`}>
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="flex items-center justify-between">
+                        {/* Logo DDM */}
+                        <Link to="/" className="flex items-center gap-3 group">
+                            <div className="w-12 h-12 bg-gray-900 rounded-xl flex items-center justify-center shadow-lg group-hover:bg-orange-600 transition-colors">
+                                <Factory className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="leading-none">
+                                <span className="text-2xl font-black text-gray-900 uppercase italic tracking-tighter">DDM</span>
+                                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">Indústria</p>
+                            </div>
                         </Link>
-                      </DropdownMenuItem>
-                      {link.dropdown.map((item) => (
-                        <DropdownMenuItem key={item.category} asChild>
-                          <Link
-                            to={`/catalogo?categoria=${item.category}`}
-                            className="cursor-pointer"
-                          >
-                            {item.name}
-                          </Link>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : (
-                  <Link
-                    key={link.name}
-                    to={link.path}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      location.pathname === link.path
-                        ? 'text-orange-600 bg-orange-50'
-                        : 'text-gray-700 hover:text-orange-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    {link.name}
-                  </Link>
-                )
-              ))}
-            </nav>
 
-            {/* Actions */}
-            <div className="flex items-center gap-3">
-              <Link to="/carrinho" className="relative">
-                <Button variant="outline" size="icon" className="relative">
-                  <ShoppingCart className="w-5 h-5" />
-                  {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                      {cartCount}
-                    </span>
-                  )}
-                </Button>
-              </Link>
+                        {/* Navegação Desktop */}
+                        <nav className="hidden lg:flex items-center gap-2">
+                            {navLinks.map((link) => (
+                                link.dropdown ? (
+                                    <DropdownMenu key={link.name}>
+                                        <DropdownMenuTrigger asChild>
+                                            <button className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                                                location.pathname.startsWith(link.path) ? 'text-orange-600' : 'text-gray-600 hover:text-orange-600'
+                                            }`}>
+                                                {link.name} <ChevronDown className="w-3 h-3" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-64 p-2 rounded-2xl shadow-2xl border-none bg-white">
+                                            {link.dropdown.map((item) => (
+                                                <DropdownMenuItem key={item.id} asChild>
+                                                    <Link to={`/catalogo?id_categoria=${item.id}`} className="flex items-center justify-between p-3 rounded-xl font-bold text-[10px] uppercase tracking-tight text-gray-700 hover:bg-orange-50 hover:text-orange-600 cursor-pointer">
+                                                        {item.name} <ChevronRight className="w-3 h-3" />
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <Link key={link.name} to={link.path} className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                                        location.pathname === link.path ? 'text-orange-600' : 'text-gray-600 hover:text-orange-600'
+                                    }`}>
+                                        {link.name}
+                                    </Link>
+                                )
+                            ))}
+                        </nav>
 
-              {user ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="hidden sm:flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      <span className="max-w-24 truncate">{user.full_name?.split(' ')[0] || 'Conta'}</span>
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem asChild>
-                      <Link to="/minha-conta" className="cursor-pointer">
-                        <User className="w-4 h-4 mr-2" />
-                        Minha Conta
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="cursor-pointer text-red-600"
-                      onClick={() => base44.auth.logout()}
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sair
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                /* CORREÇÃO AQUI: Usando Link em vez de onClick */
-                <Link to="/login">
-                  <Button className="hidden sm:flex bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6">
-                    Entrar
-                  </Button>
-                </Link>
-              )}
+                        {/* Ações de Usuário e Carrinho */}
+                        <div className="flex items-center gap-3">
+                            <Link to="/carrinho" className="relative group">
+                                <div className="w-12 h-12 rounded-xl border-2 border-gray-50 flex items-center justify-center hover:bg-orange-500 hover:border-orange-500 transition-all">
+                                    <ShoppingCart className="w-5 h-5 text-gray-900 group-hover:text-white" />
+                                    {cartCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-600 text-white text-[10px] rounded-full flex items-center justify-center font-black shadow-lg">
+                                            {cartCount}
+                                        </span>
+                                    )}
+                                </div>
+                            </Link>
 
-              {/* Mobile Menu Button */}
-              <button
-                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                onClick={() => setMobileMenuOpen(true)}
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
+                            {user ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" className="h-12 rounded-xl border-2 border-gray-50 font-black uppercase text-[10px] tracking-widest gap-2">
+                                            <User className="w-4 h-4 text-orange-500" />
+                                            <span className="hidden sm:inline">{user.ds_nome?.split(' ')[0]}</span>
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl shadow-2xl border-none">
+                                        <DropdownMenuItem asChild>
+                                            <Link to="/minha-conta" className="p-3 font-bold text-[10px] uppercase tracking-widest flex items-center gap-3 cursor-pointer">
+                                                <User className="w-4 h-4" /> Perfil Técnico
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        {user.id_perfil === 1 && (
+                                            <DropdownMenuItem asChild>
+                                                <Link to="/admin" className="p-3 font-bold text-[10px] uppercase tracking-widest flex items-center gap-3 text-orange-600 cursor-pointer">
+                                                    <Shield className="w-4 h-4" /> Painel Gestão
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem onClick={handleLogout} className="p-3 font-bold text-[10px] uppercase tracking-widest flex items-center gap-3 text-red-600 cursor-pointer">
+                                            <LogOut className="w-4 h-4" /> Sair do Sistema
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : (
+                                <Link to="/login">
+                                    <Button className="h-12 bg-gray-900 hover:bg-black text-white px-8 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-gray-200">
+                                        Entrar
+                                    </Button>
+                                </Link>
+                            )}
+
+                            <button className="lg:hidden w-12 h-12 flex items-center justify-center text-gray-900" onClick={() => setMobileMenuOpen(true)}>
+                                <Menu className="w-6 h-6" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <MobileDrawer 
+                isOpen={mobileMenuOpen} 
+                onClose={() => setMobileMenuOpen(false)} 
+                user={user} 
+            />
+
+            <main className="flex-1 animate-in fade-in duration-500">
+                {children}
+            </main>
+
+            {/* Footer Unificado */}
+            <footer className="bg-gray-900 text-white pt-20 pb-10">
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-20">
+                        <div className="lg:col-span-2">
+                            <div className="flex items-center gap-3 mb-6">
+                                <Factory className="w-8 h-8 text-orange-500" />
+                                <span className="text-2xl font-black uppercase italic tracking-tighter">DDM <span className="text-orange-500">INDÚSTRIA</span></span>
+                            </div>
+                            <p className="text-gray-400 font-medium leading-relaxed max-w-md mb-8">
+                                Referência nacional em sapatas para compactadores e artefatos técnicos de borracha. Engenharia de ponta para o setor de construção civil.
+                            </p>
+                            <div className="flex gap-4">
+                                <SocialIcon label="LinkedIn" />
+                                <SocialIcon label="WhatsApp" />
+                                <SocialIcon label="Instagram" />
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 className="font-black uppercase text-xs tracking-[0.2em] text-orange-500 mb-8">Navegação</h4>
+                            <ul className="space-y-4 text-sm font-bold uppercase text-gray-400">
+                                <li><Link to="/catalogo" className="hover:text-white transition-colors">Produtos</Link></li>
+                                <li><Link to="/quem-somos" className="hover:text-white transition-colors">História</Link></li>
+                                <li><Link to="/contato" className="hover:text-white transition-colors">Engenharia</Link></li>
+                                <li><Link to="/login" className="hover:text-white transition-colors">Portal Cliente</Link></li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-black uppercase text-xs tracking-[0.2em] text-orange-500 mb-8">Unidade Fabril</h4>
+                            <ul className="space-y-4 text-[11px] font-bold text-gray-400 uppercase leading-relaxed">
+                                <li className="flex items-start gap-3"><MapPin className="w-4 h-4 text-orange-500 shrink-0" /> Vespasiano - MG<br/>Distrito Industrial</li>
+                                <li className="flex items-center gap-3"><Clock className="w-4 h-4 text-orange-500 shrink-0" /> Seg-Sex: 08:00 - 18:00</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                            &copy; {new Date().getFullYear()} DDM INDÚSTRIA E COMÉRCIO | Todos os direitos reservados.
+                        </p>
+                        <div className="flex items-center gap-6">
+                            <Shield className="w-5 h-5 text-gray-700" />
+                            <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Site Seguro 256-bit</span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
         </div>
-      </header>
+    );
+}
 
-      <MobileDrawer
-        isOpen={mobileMenuOpen}
-        onClose={() => setMobileMenuOpen(false)}
-        currentPageName={currentPageName}
-        user={user}
-      />
-
-      <main className="flex-1">
-        {children}
-      </main>
-
-      <footer className="bg-gray-900 text-white">
-        {/* ... (Footer content same as before) ... */}
-        {/* Vou abreviar o footer aqui pois já está correto na sua versão, mantenha o que você já tem ou copie do anterior */}
-        <div className="border-b border-gray-800">
-          <div className="max-w-7xl mx-auto px-4 py-8">
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-               {/* Ícones de confiança... */}
-               <div className="flex items-center gap-3"><div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center"><Clock className="w-6 h-6 text-orange-500" /></div><div><p className="font-semibold">+30 Anos</p><p className="text-sm text-gray-400">de Experiência</p></div></div>
-               <div className="flex items-center gap-3"><div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center"><Wrench className="w-6 h-6 text-orange-500" /></div><div><p className="font-semibold">Engenharia</p><p className="text-sm text-gray-400">Especializada</p></div></div>
-               <div className="flex items-center gap-3"><div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center"><Factory className="w-6 h-6 text-orange-500" /></div><div><p className="font-semibold">Fabricação</p><p className="text-sm text-gray-400">Nacional</p></div></div>
-               <div className="flex items-center gap-3"><div className="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center"><Shield className="w-6 h-6 text-orange-500" /></div><div><p className="font-semibold">Qualidade</p><p className="text-sm text-gray-400">Garantida</p></div></div>
-             </div>
-          </div>
+function SocialIcon({ label }) {
+    return (
+        <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-orange-500 transition-all cursor-pointer group">
+            <span className="text-[8px] font-black uppercase text-gray-500 group-hover:text-white">{label[0]}</span>
         </div>
-        <div className="max-w-7xl mx-auto px-4 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="lg:col-span-2">
-              <div className="flex items-center gap-3 mb-4"><div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center"><Factory className="w-6 h-6 text-white" /></div><span className="text-xl font-bold">DDM Indústria</span></div>
-              <p className="text-gray-400 mb-4 leading-relaxed">Há mais de 30 anos fabricando artefatos de borracha de alta qualidade.</p>
-              <div className="space-y-2 text-sm">
-                <p className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" /> Vespasiano-MG</p>
-                <p className="flex items-center gap-2"><Phone className="w-4 h-4 text-orange-500" /> (31) 3621-0000</p>
-                <p className="flex items-center gap-2"><Mail className="w-4 h-4 text-orange-500" /> contato@ddmindustria.com.br</p>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4 text-lg">Links Rápidos</h4>
-              <ul className="space-y-2">
-                <li><Link to="/" className="text-gray-400 hover:text-orange-500">Início</Link></li>
-                <li><Link to="/catalogo" className="text-gray-400 hover:text-orange-500">Catálogo</Link></li>
-                <li><Link to="/contato" className="text-gray-400 hover:text-orange-500">Contato</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4 text-lg">Categorias</h4>
-              <ul className="space-y-2">
-                <li><Link to="/catalogo?categoria=sapatas" className="text-gray-400 hover:text-orange-500">Sapatas</Link></li>
-                <li><Link to="/catalogo?categoria=coxins" className="text-gray-400 hover:text-orange-500">Coxins</Link></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+    );
 }

@@ -1,71 +1,52 @@
 import React, { useState } from 'react';
-import { base44 } from '../api/base44Client';
+import { __ddmDatabase } from '../api/MysqlServer.js';
 import { useQuery } from '@tanstack/react-query';
-import {
-  LayoutDashboard, Package, ShoppingCart,
-  TrendingUp, DollarSign, Loader2, Lock, Menu
+import { 
+  LayoutDashboard, Package, ShoppingCart, TrendingUp, 
+  DollarSign, Lock, Archive 
 } from 'lucide-react';
 import { Button } from '../Components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../Components/ui/card';
+import { Card, CardContent } from '../Components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../Components/ui/tabs';
-
-// IMPORT CORRECTIONS
 import AdminProducts from '../Components/admin/AdminProducts';
 import AdminOrders from '../Components/admin/AdminOrders';
 import DashboardCharts from '../Components/admin/DashboardCharts';
+import AdminBoxes from '../Components/admin/AdminBoxes'; // Importando o novo componente
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Busca o usuário que salvamos no LocalStorage durante o Login
+  const user = JSON.parse(localStorage.getItem('ddm_user'));
 
-  const { data: user, isLoading: userLoading } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: async () => {
-      // Mock para permitir acesso admin localmente
-      return { role: 'admin', full_name: 'Administrador' };
-
-      /* Lógica Real
-      const isAuth = await base44.auth.isAuthenticated();
-      if (isAuth) return base44.auth.me();
-      return null;
-      */
-    }
-  });
-
-  const { data: products } = useQuery({
-    queryKey: ['allProducts'],
-    queryFn: () => base44.entities.Product.list(),
-    initialData: []
-  });
-
-  const { data: orders } = useQuery({
-    queryKey: ['allOrders'],
-    queryFn: () => base44.entities.Order.list('-created_date'),
-    initialData: []
-  });
-
-  if (userLoading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-      </div>
-    );
+  // Opcional: Se não houver usuário, redireciona para login
+  if (!user || user.id_perfil !== 1) {
+      window.location.href = '/login';
   }
 
-  if (!user || user.role !== 'admin') {
+  const { data: products = [] } = useQuery({
+    queryKey: ['adminProducts'],
+    queryFn: () => __ddmDatabase.entities.Produtos.list()
+  });
+
+  const { data: orders = [] } = useQuery({
+    queryKey: ['adminOrders'],
+    queryFn: () => __ddmDatabase.entities.Vendas.list()
+  });
+
+  // Proteção de Rota: Se não for admin (id_perfil 1), bloqueia
+  if (!user || user.id_perfil !== 1) { 
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <Card className="max-w-md mx-4 text-center">
-          <CardContent className="pt-8 pb-6">
-            <Lock className="w-16 h-16 text-red-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
-            <p className="text-gray-500 mb-6">
-              Esta área é exclusiva para administradores do sistema.
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center border-t-8 border-t-gray-900 shadow-2xl rounded-2xl">
+          <CardContent className="pt-10 pb-8 px-8">
+            <Lock className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+            <h2 className="text-2xl font-black text-gray-900 mb-2 uppercase italic tracking-tighter">Acesso Restrito</h2>
+            <p className="text-gray-500 mb-8 font-bold text-xs uppercase tracking-tight">
+              Esta área é exclusiva para a gerência da DDM Indústria.
             </p>
-            <Button
-              variant="outline"
-              onClick={() => window.history.back()}
-            >
-              Voltar
+            <Button className="w-full bg-gray-900 hover:bg-black text-white font-black uppercase tracking-widest h-12" onClick={() => window.location.href = '/'}>
+              Voltar para a Loja
             </Button>
           </CardContent>
         </Card>
@@ -74,170 +55,90 @@ export default function Admin() {
   }
 
   const totalRevenue = orders
-    .filter(o => o.status !== 'cancelado')
-    .reduce((sum, o) => sum + (o.total || 0), 0);
+    .filter(o => o.st_venda !== 'Cancelada')
+    .reduce((sum, o) => sum + Number(o.nu_valor_total_nota || 0), 0);
 
-  const pendingOrders = orders.filter(o => o.status === 'pendente').length;
-  const activeProducts = products.filter(p => p.ativo !== false).length;
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
+  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Admin Header */}
-      <div className="bg-gray-900 text-white py-4 px-6">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header do Admin */}
+      <div className="bg-gray-900 text-white border-b-4 border-orange-500 shadow-lg px-6 py-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-              <LayoutDashboard className="w-6 h-6" />
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
+              <LayoutDashboard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg">Painel Administrativo</h1>
-              <p className="text-gray-400 text-sm">DDM Indústria</p>
+              <h1 className="font-black text-xl uppercase tracking-tighter italic">Painel de <span className="text-orange-500">Gestão</span></h1>
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em]">DDM Indústria Administrativo</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400">
-              Olá, <span className="text-white font-medium">{user.full_name}</span>
-            </span>
+          <div className="text-right hidden sm:block border-l border-gray-800 pl-6">
+            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Operador Logístico</p>
+            <p className="text-sm font-black uppercase text-orange-500">{user.ds_nome}</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 md:mb-8 w-full justify-start overflow-x-auto">
-            <TabsTrigger value="dashboard" className="flex items-center gap-2 min-w-max">
-              <LayoutDashboard className="w-4 h-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </TabsTrigger>
-            <TabsTrigger value="products" className="flex items-center gap-2 min-w-max">
-              <Package className="w-4 h-4" />
-              <span className="hidden sm:inline">Produtos</span>
-            </TabsTrigger>
-            <TabsTrigger value="orders" className="flex items-center gap-2 min-w-max">
-              <ShoppingCart className="w-4 h-4" />
-              <span className="hidden sm:inline">Pedidos</span>
-            </TabsTrigger>
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="bg-white border-2 border-gray-100 h-16 p-2 shadow-sm rounded-2xl w-full justify-start overflow-x-auto sm:justify-center gap-2">
+            <TabTrigger value="dashboard" icon={<TrendingUp className="w-4 h-4" />} label="Dashboard" />
+            <TabTrigger value="products" icon={<Package className="w-4 h-4" />} label="Produtos" />
+            <TabTrigger value="orders" icon={<ShoppingCart className="w-4 h-4" />} label="Vendas" />
+            <TabTrigger value="boxes" icon={<Archive className="w-4 h-4" />} label="Embalagens" />
           </TabsList>
 
-          {/* Dashboard */}
-          <TabsContent value="dashboard">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-green-600 font-medium">Receita Total</p>
-                      <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">
-                        {formatCurrency(totalRevenue)}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shadow-lg shadow-green-200">
-                      <DollarSign className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-yellow-600 font-medium">Pendentes</p>
-                      <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{pendingOrders}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-yellow-500 rounded-xl flex items-center justify-center shadow-lg shadow-yellow-200">
-                      <ShoppingCart className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-blue-600 font-medium">Produtos Ativos</p>
-                      <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{activeProducts}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
-                      <Package className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-purple-600 font-medium">Total Pedidos</p>
-                      <p className="text-xl md:text-2xl font-bold text-gray-900 mt-1">{orders.length}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-purple-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-200">
-                      <TrendingUp className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          <TabsContent value="dashboard" className="space-y-8 animate-in fade-in zoom-in duration-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <KPICard title="Receita Total" value={formatCurrency(totalRevenue)} icon={DollarSign} color="green" />
+              <KPICard title="Vendas Pendentes" value={orders.filter(o => o.st_venda === 'Pendente').length} icon={ShoppingCart} color="orange" />
+              <KPICard title="Produtos Ativos" value={products.filter(p => p.st_ativo === 'S').length} icon={Package} color="blue" />
+              <KPICard title="Total Pedidos" value={orders.length} icon={TrendingUp} color="purple" />
             </div>
-
-            {/* Charts */}
-            <DashboardCharts orders={orders} products={products} />
-
-            {/* Recent Orders */}
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Pedidos Recentes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {orders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-gray-900">#{order.numero_pedido}</p>
-                        <p className="text-sm text-gray-500 truncate">{order.user_email}</p>
-                      </div>
-                      <div className="text-right ml-4">
-                        <p className="font-bold text-gray-900">{formatCurrency(order.total)}</p>
-                        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${
-                          order.status === 'pago' ? 'bg-green-100 text-green-700' :
-                          order.status === 'pendente' ? 'bg-yellow-100 text-yellow-700' :
-                          order.status === 'enviado' ? 'bg-blue-100 text-blue-700' :
-                          order.status === 'entregue' ? 'bg-emerald-100 text-emerald-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {order.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  {orders.length === 0 && (
-                    <p className="text-center text-gray-500 py-8">Nenhum pedido ainda</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <DashboardCharts Vendas={orders} ProdutosChart={products} />
           </TabsContent>
 
-          {/* Products */}
-          <TabsContent value="products">
-            <AdminProducts />
-          </TabsContent>
-
-          {/* Orders */}
-          <TabsContent value="orders">
-            <AdminOrders />
-          </TabsContent>
+          <TabsContent value="products" className="animate-in slide-in-from-bottom-4 duration-500"><AdminProducts /></TabsContent>
+          <TabsContent value="orders" className="animate-in slide-in-from-bottom-4 duration-500"><AdminOrders /></TabsContent>
+          <TabsContent value="boxes" className="animate-in slide-in-from-bottom-4 duration-500"><AdminBoxes /></TabsContent>
         </Tabs>
       </div>
     </div>
+  );
+}
+
+// Sub-componente para os Triggers das Tabs para limpar o código principal
+function TabTrigger({ value, icon, label }) {
+  return (
+    <TabsTrigger 
+      value={value} 
+      className="gap-2 px-8 font-black uppercase text-[10px] tracking-widest data-[state=active]:bg-gray-900 data-[state=active]:text-orange-500 transition-all rounded-xl h-full"
+    >
+      {icon} {label}
+    </TabsTrigger>
+  );
+}
+
+function KPICard({ title, value, icon: Icon, color }) {
+  const colors = {
+    green: 'bg-green-500 text-green-600',
+    orange: 'bg-orange-500 text-orange-600',
+    blue: 'bg-blue-500 text-blue-600',
+    purple: 'bg-purple-500 text-purple-600'
+  };
+  return (
+    <Card className="rounded-2xl border-2 border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+      <CardContent className="pt-6 flex items-center justify-between">
+        <div>
+          <p className={`text-[10px] font-black uppercase tracking-widest ${colors[color].split(' ')[1]}`}>{title}</p>
+          <p className="text-2xl font-black text-gray-900 mt-1 tracking-tighter">{value}</p>
+        </div>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-lg ${colors[color].split(' ')[0]}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }

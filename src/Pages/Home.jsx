@@ -1,135 +1,122 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { base44 } from '../api/base44Client';
+import { __ddmDatabase, getFullImageUrl } from '../api/MysqlServer.js';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight, ChevronRight, Factory, Wrench, Shield,
-  Clock, Cog, CheckCircle2, Truck, Award, Loader2
+  Cog, CheckCircle2, Truck, Loader2, Package
 } from 'lucide-react';
 import { Button } from '../Components/ui/button';
 import { Card, CardContent } from '../Components/ui/card';
 import HeroSlider from '../Components/home/HeroSlider';
 
 const categories = [
-  {
-    id: 'sapatas',
-    name: 'Sapatas para Compactadores',
-    description: 'Sapatas de alta durabilidade para compactadores de solo',
-    image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop',
-    icon: Cog
-  },
-  {
-    id: 'coxins_batentes',
-    name: 'Coxins e Batentes',
-    description: 'Amortecedores e isoladores de vibração industrial',
-    image: 'https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=400&h=300&fit=crop',
-    icon: Shield
-  },
-  {
-    id: 'protecoes_sanfonadas',
-    name: 'Proteções Sanfonadas',
-    description: 'Proteção sanfonada para guias e fusos de máquinas',
-    image: 'https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=400&h=300&fit=crop',
-    icon: Wrench
-  },
-  {
-    id: 'molas',
-    name: 'Molas',
-    description: 'Molas de borracha para aplicações industriais',
-    image: 'https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?w=400&h=300&fit=crop',
-    icon: Factory
-  }
+  { id: 1, name: 'Sapatas para Compactadores', description: 'Alta durabilidade para compactadores de solo.', icon: Cog },
+  { id: 2, name: 'Coxins e Batentes', description: 'Amortecedores e isoladores de vibração.', icon: Shield },
+  { id: 3, name: 'Proteções Sanfonadas', description: 'Proteção para guias e fusos de máquinas.', icon: Wrench },
+  { id: 4, name: 'Molas de Borracha', description: 'Molas industriais de alta performance.', icon: Factory }
 ];
 
-const brands = [
-  'Wacker', 'Weber', 'Dynapac', 'Bomaq', 'Mikasa',
-  'Komatsu', 'Ingersoll-Rand', 'Stone', 'Masalta'
-];
-
-const materials = [
-  { name: 'Borracha Natural', desc: 'Alta elasticidade' },
-  { name: 'SBR', desc: 'Resistência à abrasão' },
-  { name: 'NBR (Nitrílica)', desc: 'Resistência a óleos' },
-  { name: 'VITON (FPM)', desc: 'Alta temperatura' }
-];
+const brands = ['Wacker', 'Weber', 'Dynapac', 'Bomaq', 'Mikasa', 'Komatsu', 'Stone', 'Masalta'];
 
 export default function Home() {
-  const { data: featuredProducts, isLoading } = useQuery({
+  // Busca de Produtos em Destaque sincronizada com tb_produtos
+  const { data: featuredProducts = [], isLoading } = useQuery({
     queryKey: ['featuredProducts'],
     queryFn: async () => {
-        const allProducts = await base44.entities.Product.list();
-        return allProducts
-            .filter(p => p.destaque === true)
-            .slice(0, 8);
-    },
-    initialData: []
+        const all = await __ddmDatabase.entities.Produtos.list();
+        // Filtra apenas os que estão ativos e marcados como destaque (st_destaque === 'S')
+        return all.filter(p => p.st_ativo === 'S').slice(0, 8);
+    }
   });
 
+  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
   return (
-    <div className="bg-gray-50">
-      {/* Hero Slider */}
+    <div className="bg-white min-h-screen">
       <HeroSlider />
 
-      {/* Brand Compatibility Banner */}
-      <section className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <p className="text-center text-gray-500 text-sm font-medium mb-6">
-            PEÇAS COMPATÍVEIS COM AS PRINCIPAIS MARCAS DO MERCADO
+      {/* Marcas Compatíveis - Banner Industrial */}
+      <section className="bg-gray-900 py-10 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <p className="text-center text-orange-500 text-[10px] font-black uppercase tracking-[0.4em] mb-8">
+            Peças compatíveis com líderes mundiais
           </p>
-          <div className="flex flex-wrap justify-center items-center gap-6 md:gap-12">
-            {brands.map((brand) => (
-              <span
-                key={brand}
-                className="text-gray-400 hover:text-orange-500 font-bold text-lg md:text-xl transition-colors cursor-default"
-              >
-                {brand}
-              </span>
+          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale hover:grayscale-0 transition-all duration-500">
+             {brands.map(brand => (
+               <span key={brand} className="text-white font-black text-xl md:text-2xl italic tracking-tighter uppercase">{brand}</span>
+             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Categorias em destaque */}
+      <section className="py-24 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row justify-between items-end mb-16">
+            <div className="max-w-xl">
+              <h2 className="text-4xl md:text-5xl font-black text-gray-900 uppercase italic tracking-tighter mb-4">
+                Nossas Linhas de <span className="text-orange-500">Produção</span>
+              </h2>
+              <p className="text-gray-500 font-bold uppercase text-xs tracking-widest">Tecnologia em elastômeros para o setor de construção civil.</p>
+            </div>
+            <Link to="/catalogo" className="mt-6 md:mt-0">
+                <Button variant="link" className="text-orange-600 font-black uppercase tracking-widest text-xs p-0 group">
+                    Ver catálogo completo <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-2 transition-transform" />
+                </Button>
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {categories.map((cat) => (
+              <Link key={cat.id} to={`/catalogo?id_categoria=${cat.id}`} className="group">
+                <Card className="border-none shadow-none bg-transparent overflow-visible">
+                  <div className="relative h-64 bg-gray-900 rounded-3xl mb-6 overflow-hidden flex items-center justify-center transition-transform group-hover:-translate-y-2">
+                    <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+                    <cat.icon className="w-16 h-16 text-orange-500 relative z-10" />
+                  </div>
+                  <h3 className="font-black text-gray-900 uppercase text-sm tracking-tight mb-2">{cat.name}</h3>
+                  <p className="text-gray-400 text-xs font-bold leading-relaxed">{cat.description}</p>
+                </Card>
+              </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Categories Section */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Nossas Linhas de Produtos
-            </h2>
-            <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-              Fabricamos peças técnicas de borracha com materiais especializados
-              para as mais diversas aplicações industriais
-            </p>
+      {/* Produtos em Destaque */}
+      <section className="py-24">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-black text-gray-900 uppercase italic mb-2 tracking-tighter">Peças Mais <span className="text-orange-500">Procuradas</span></h2>
+            <div className="w-20 h-1.5 bg-orange-500 mx-auto" />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                to={`/catalogo?categoria=${category.id}`}
-              >
-                <Card className="group h-full overflow-hidden hover:shadow-xl transition-all duration-300 border-0 bg-white">
-                  <div className="relative h-48 overflow-hidden">
-                    <img
-                      src={category.image}
-                      alt={category.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {isLoading ? (
+              <div className="col-span-full flex justify-center py-20"><Loader2 className="animate-spin text-orange-500" /></div>
+            ) : featuredProducts.map((product) => (
+              <Link key={product.id_produto} to={`/produto?id=${product.id_produto}`} className="group">
+                <Card className="rounded-3xl border-2 border-gray-50 hover:border-orange-200 transition-all overflow-hidden h-full">
+                  <div className="relative h-56 bg-white p-6">
+                    <img 
+                        src={getFullImageUrl(product.url_imagem_principal)} 
+                        alt={product.ds_nome} 
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform" 
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute bottom-4 left-4">
-                      <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center mb-2">
-                        <category.icon className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
+                    <Badge className="absolute top-4 right-4 bg-gray-900 text-[10px] font-black uppercase">
+                        {product.ds_marca}
+                    </Badge>
                   </div>
-                  <CardContent className="p-6">
-                    <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">
-                      {category.name}
-                    </h3>
-                    <p className="text-gray-500 text-sm mb-4">{category.description}</p>
-                    <span className="text-orange-500 font-medium text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                      Ver Produtos <ChevronRight className="w-4 h-4" />
-                    </span>
+                  <CardContent className="p-6 bg-white">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">{product.nu_ddm}</p>
+                    <h3 className="font-black text-gray-900 text-sm uppercase tracking-tight line-clamp-2 h-10 mb-4">{product.ds_nome}</h3>
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                        <span className="font-black text-lg text-gray-900 tracking-tighter">{formatCurrency(product.nu_preco_venda_atual)}</span>
+                        <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                            <ArrowRight className="w-4 h-4" />
+                        </div>
+                    </div>
                   </CardContent>
                 </Card>
               </Link>
@@ -138,155 +125,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products */}
-      <section className="py-20 bg-gray-100">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                Produtos em Destaque
-              </h2>
-              <p className="text-gray-600">Confira nossos produtos mais procurados</p>
-            </div>
-            <Link to="/catalogo">
-              <Button variant="outline" className="border-gray-300">
-                Ver Todos <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {isLoading ? (
-                <div className="col-span-full flex justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      {/* Seção Industrial Sob Medida */}
+      <section className="py-24 bg-gray-900 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+            <div className="relative z-10">
+                <span className="inline-block bg-orange-500 text-white font-black text-[10px] uppercase tracking-[0.3em] px-4 py-2 rounded-lg mb-6">Engenharia e Projetos</span>
+                <h2 className="text-4xl md:text-6xl font-black text-white uppercase italic tracking-tighter mb-8 leading-[0.9]">Desenvolvimento <span className="text-orange-500">Sob Medida</span></h2>
+                <p className="text-gray-400 font-bold text-sm uppercase leading-relaxed mb-10 tracking-tight">
+                    Nossa fábrica está equipada para criar moldes exclusivos e peças técnicas a partir de desenhos ou amostras físicas. 
+                </p>
+                <div className="flex gap-4">
+                    <Button asChild className="bg-white hover:bg-orange-500 text-gray-900 hover:text-white font-black uppercase tracking-widest h-16 px-8 rounded-2xl transition-all">
+                        <Link to="/contato">Solicitar Orçamento <ArrowRight className="ml-2 w-4 h-4" /></Link>
+                    </Button>
                 </div>
-            ) : featuredProducts.length > 0 ? (
-              featuredProducts.map((product) => (
-                <Link key={product.id} to={`/produto?id=${product.id}`}>
-                  <Card className="group overflow-hidden hover:shadow-lg transition-all duration-300 h-full">
-                    <div className="relative h-48 bg-gradient-to-br from-gray-100 to-gray-200">
-                      {product.imagem_url ? (
-                        <img
-                          src={product.imagem_url}
-                          alt={product.nome}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-24 h-24 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg shadow-lg flex items-center justify-center">
-                            <Cog className="w-12 h-12 text-gray-600" />
-                          </div>
-                        </div>
-                      )}
-                      <div className="absolute top-3 right-3">
-                        <span className="bg-orange-500 text-white text-xs font-semibold px-2 py-1 rounded shadow-md">
-                          {product.marca}
-                        </span>
-                      </div>
-                    </div>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-gray-500 mb-1">Cód: {product.num_ddm}</p>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-orange-600 transition-colors line-clamp-2">
-                        {product.nome}
-                      </h3>
-                      {product.preco && (
-                        <p className="text-lg font-bold text-gray-900 mt-2">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.preco)}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-sm text-gray-500">{product.serie || '--'}</span>
-                        <span className="text-orange-500 font-medium text-sm">Comprar →</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <p className="text-gray-500">Explore nosso catálogo completo de produtos</p>
-                <Link to="/catalogo">
-                  <Button className="mt-4 bg-orange-500 hover:bg-orange-600">
-                    Ver Catálogo
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Materials Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-                Materiais Especializados
-              </h2>
-              <p className="text-gray-600 text-lg mb-8 leading-relaxed">
-                Trabalhamos com os melhores elastômeros do mercado para garantir
-                durabilidade, resistência e performance em cada aplicação.
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {materials.map((material, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-orange-200 transition-colors"
-                  >
-                    <CheckCircle2 className="w-5 h-5 text-orange-500 mb-2" />
-                    <p className="font-semibold text-gray-900">{material.name}</p>
-                    <p className="text-sm text-gray-500">{material.desc}</p>
-                  </div>
-                ))}
-              </div>
             </div>
-
             <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=600&h=500&fit=crop"
-                alt="Materiais"
-                className="rounded-2xl shadow-2xl"
-              />
-              <div className="absolute -bottom-6 -left-6 bg-orange-500 text-white p-6 rounded-xl shadow-xl">
-                <p className="text-3xl font-bold">100%</p>
-                <p className="text-sm">Fabricação Nacional</p>
-              </div>
+                <div className="absolute -inset-4 bg-orange-500/10 blur-3xl rounded-full animate-pulse" />
+                <img 
+                    src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800" 
+                    className="rounded-3xl shadow-2xl relative z-10 border-4 border-white/5" 
+                    alt="Processo Industrial" 
+                />
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-20 bg-gray-900">
-        <div className="max-w-4xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 bg-orange-500/20 rounded-full px-4 py-2 mb-6">
-            <Truck className="w-4 h-4 text-orange-500" />
-            <span className="text-orange-400 text-sm font-medium">Entrega para Todo Brasil</span>
-          </div>
-
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-            Precisa de Peças Sob Medida?
-          </h2>
-          <p className="text-gray-400 text-lg mb-8 max-w-2xl mx-auto">
-            Nossa equipe de engenharia está preparada para desenvolver peças
-            personalizadas de acordo com suas especificações. Envie amostras ou desenhos técnicos.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/contato">
-              <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 h-14">
-                Solicitar Orçamento Personalizado
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </Link>
-            <Link to="/quem-somos">
-              <Button size="lg" variant="outline" className="border-2 border-white text-white bg-transparent hover:bg-white hover:text-gray-900 h-14 font-semibold">Conhecer Nossa História</Button>
-            </Link>
-          </div>
         </div>
       </section>
     </div>
   );
+}
+
+// Pequeno componente de Badge local para evitar erro de import
+function Badge({ children, className }) {
+    return (
+        <span className={`px-2 py-1 rounded ${className}`}>
+            {children}
+        </span>
+    );
 }

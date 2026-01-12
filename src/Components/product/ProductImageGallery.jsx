@@ -1,20 +1,33 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, ZoomIn, Cog } from 'lucide-react';
-// FIX: Relative path to ui/badge
 import { Badge } from '../ui/badge';
+import { getFullImageUrl } from '../../api/MysqlServer.js';
 
 export default function ProductImageGallery({
-  mainImage,
-  images = [],
+  mainImage, // Vem da tb_produtos (url_imagem)
+  images = [], // Array de objetos ou strings da tb_produto_imagens
   productName,
   marca,
   inStock
 }) {
-  // Combine main image with additional images
-  const allImages = mainImage
-    ? [mainImage, ...images.filter(img => img !== mainImage)]
-    : images.length > 0 ? images : [];
+  // Unifica a imagem principal com a galeria, garantindo URLs completas
+  const allImages = React.useMemo(() => {
+    const list = [];
+    if (mainImage) list.push(getFullImageUrl(mainImage));
+    
+    if (Array.isArray(images)) {
+      images.forEach(img => {
+        // Trata se o item for o objeto da tabela ou apenas a string da URL
+        const url = typeof img === 'object' ? img.url_imagem : img;
+        const fullUrl = getFullImageUrl(url);
+        if (fullUrl !== getFullImageUrl(mainImage)) {
+          list.push(fullUrl);
+        }
+      });
+    }
+    return list;
+  }, [mainImage, images]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -22,11 +35,13 @@ export default function ProductImageGallery({
 
   const selectedImage = allImages[selectedIndex] || null;
 
-  const handlePrev = () => {
+  const handlePrev = (e) => {
+    e.stopPropagation();
     setSelectedIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
   };
 
-  const handleNext = () => {
+  const handleNext = (e) => {
+    e.stopPropagation();
     setSelectedIndex((prev) => (prev + 1) % allImages.length);
   };
 
@@ -38,133 +53,102 @@ export default function ProductImageGallery({
     setMousePosition({ x, y });
   };
 
-  const handleThumbnailClick = (index) => {
-    setSelectedIndex(index);
-  };
-
   return (
-    <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 p-4 lg:p-8">
-      {/* Main Image Container */}
+    <div className="flex flex-col gap-4">
+      {/* Container da Imagem Principal com Zoom Industrial */}
       <div
-        className="relative h-80 lg:h-96 mb-4 rounded-xl overflow-hidden bg-white cursor-zoom-in"
+        className="relative aspect-square rounded-2xl overflow-hidden bg-white border-2 border-gray-100 shadow-sm cursor-zoom-in group"
         onMouseEnter={() => setIsZoomed(true)}
         onMouseLeave={() => setIsZoomed(false)}
         onMouseMove={handleMouseMove}
-        onClick={() => selectedImage && window.open(selectedImage, '_blank')}
       >
         <AnimatePresence mode="wait">
           {selectedImage ? (
             <motion.img
-              key={selectedIndex}
+              key={selectedImage}
               src={selectedImage}
-              alt={`${productName} - Imagem ${selectedIndex + 1}`}
+              alt={productName}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="w-full h-full object-contain transition-transform duration-200"
+              transition={{ duration: 0.3 }}
+              className="w-full h-full object-contain p-6 transition-transform duration-200 ease-out"
               style={{
-                transform: isZoomed ? 'scale(1.5)' : 'scale(1)',
+                transform: isZoomed ? 'scale(2.2)' : 'scale(1)',
                 transformOrigin: `${mousePosition.x}% ${mousePosition.y}%`
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="relative">
-                <div className="w-48 h-48 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg shadow-2xl flex items-center justify-center">
-                  <Cog className="w-24 h-24 text-gray-600" />
-                </div>
-                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-40 h-4 bg-black/20 blur-md rounded-full" />
-              </div>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-300">
+              <Cog className="w-16 h-16 mb-2 animate-spin-slow opacity-20" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Imagem não disponível</span>
             </div>
           )}
         </AnimatePresence>
 
-        {/* Zoom Indicator */}
-        {selectedImage && (
-          <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5">
-            <ZoomIn className="w-3.5 h-3.5" />
-            {isZoomed ? 'Clique para ampliar' : 'Passe o mouse para zoom'}
-          </div>
-        )}
-
-        {/* Navigation Arrows */}
-        {allImages.length > 1 && (
-          <>
-            <button
-              onClick={(e) => { e.stopPropagation(); handlePrev(); }}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 hover:bg-white shadow-lg rounded-full flex items-center justify-center transition-all"
-            >
-              <ChevronLeft className="w-5 h-5 text-gray-700" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleNext(); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 hover:bg-white shadow-lg rounded-full flex items-center justify-center transition-all"
-            >
-              <ChevronRight className="w-5 h-5 text-gray-700" />
-            </button>
-          </>
-        )}
-
-        {/* Brand Badge */}
-        <div className="absolute top-4 left-4">
-          <Badge className="bg-orange-500 text-white text-sm px-4 py-1.5 font-bold shadow-lg">
-            {marca}
+        {/* Badges Técnicos */}
+        <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none z-10">
+          <Badge className="bg-gray-900 text-orange-500 font-black px-3 py-1 border-none shadow-lg text-[10px] uppercase tracking-tighter italic">
+            {marca || 'DDM ORIGINAL'}
           </Badge>
-        </div>
-
-        {/* Stock Badge */}
-        <div className="absolute bottom-4 left-4">
-          {inStock ? (
-            <Badge className="bg-green-500 text-white shadow-lg">
-              Em Estoque
+          {!inStock && (
+            <Badge className="bg-red-600 text-white font-black shadow-lg text-[10px] uppercase">
+              Sem Estoque
             </Badge>
-          ) : (
-            <Badge className="bg-red-500 text-white shadow-lg">Indisponível</Badge>
           )}
         </div>
 
-        {/* Image Counter */}
-        {allImages.length > 1 && (
-          <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-sm text-white text-sm px-3 py-1 rounded-full">
-            {selectedIndex + 1} / {allImages.length}
+        {/* Indicador de Lupa */}
+        {selectedImage && !isZoomed && (
+          <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-sm text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <ZoomIn className="w-5 h-5" />
           </div>
+        )}
+
+        {/* Navegação Rápida */}
+        {allImages.length > 1 && (
+          <>
+            <button
+              onClick={handlePrev}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 bg-white border-2 border-gray-100 hover:bg-gray-900 hover:text-white shadow-xl rounded-xl flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <button
+              onClick={handleNext}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 bg-white border-2 border-gray-100 hover:bg-gray-900 hover:text-white shadow-xl rounded-xl flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          </>
         )}
       </div>
 
-      {/* Thumbnails Strip */}
+      {/* Grid de Miniaturas (Thumbnails) */}
       {allImages.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
           {allImages.map((img, idx) => (
             <button
               key={idx}
-              onClick={() => handleThumbnailClick(idx)}
-              className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+              onClick={() => setSelectedIndex(idx)}
+              className={`relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden border-2 transition-all ${
                 idx === selectedIndex
-                  ? 'border-orange-500 shadow-lg'
-                  : 'border-transparent hover:border-gray-300'
+                  ? 'border-orange-500 bg-orange-50'
+                  : 'border-gray-100 hover:border-gray-300 bg-white'
               }`}
             >
               <img
                 src={img}
-                alt={`Thumbnail ${idx + 1}`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain p-1"
+                alt={`Detalhe ${idx + 1}`}
               />
               {idx === selectedIndex && (
-                <div className="absolute inset-0 bg-orange-500/20" />
+                 <div className="absolute inset-0 bg-orange-500/5" />
               )}
             </button>
           ))}
         </div>
       )}
-
-      {/* Category indicator - Fixed position relative to container, simplified logic */}
-      <div className="mt-4">
-        <div className="bg-white rounded-lg px-4 py-2 shadow-sm border border-gray-100 inline-block">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Peça Industrial</p>
-          <p className="text-sm font-semibold text-gray-800">Borracha de Alta Performance</p>
-        </div>
-      </div>
     </div>
   );
 }
