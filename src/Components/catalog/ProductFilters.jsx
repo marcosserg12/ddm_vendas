@@ -3,8 +3,6 @@ import { Filter, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
-import { __ddmDatabase } from '../../api/MysqlServer.js';
-import { useQuery } from '@tanstack/react-query';
 import {
     Accordion,
     AccordionContent,
@@ -17,22 +15,68 @@ import {
     SheetHeader,
     SheetTitle,
     SheetTrigger,
+    SheetClose
 } from "../ui/sheet";
 
 function FilterContent({
     filters,
+    categorias = [],
+    marcas = [],
+    series = [],
+    modelos = [],
     onFilterChange,
-    onClearFilters,
-    data
+    onClearFilters
 }) {
-    const hasActiveFilters = filters.id_marca || filters.id_serie || filters.id_modelo || filters.id_categoria;
+    const hasActiveFilters =
+        filters.id_marca?.length > 0 ||
+        filters.id_categoria?.length > 0 ||
+        filters.id_serie?.length > 0 ||
+        filters.id_modelo?.length > 0;
+
+    const toggleFilter = (key, id, checked) => {
+        const currentList = filters[key] || [];
+        let newList;
+        if (checked) {
+            newList = [...currentList, id];
+        } else {
+            newList = currentList.filter(item => item !== id);
+        }
+        onFilterChange(key, newList);
+    };
+
+    // Helper seguro para checar se está selecionado (String vs Number safe)
+    const isChecked = (list, id) => {
+        if (!list) return false;
+        return list.some(item => String(item) === String(id));
+    };
+
+    // Filtragem de dependências
+    const filteredSeries = React.useMemo(() => {
+        if (!filters.id_marca || filters.id_marca.length === 0) return [];
+        return series.filter(s => isChecked(filters.id_marca, s.id_marca));
+    }, [series, filters.id_marca]);
+
+    const filteredModels = React.useMemo(() => {
+        if (!filters.id_marca || filters.id_marca.length === 0) return [];
+        return modelos.filter(m => {
+            const matchMarca = isChecked(filters.id_marca, m.id_marca);
+            if (!matchMarca) return false;
+            if (filters.id_serie && filters.id_serie.length > 0) {
+                if (!m.id_serie || !isChecked(filters.id_serie, m.id_serie)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [modelos, filters.id_marca, filters.id_serie]);
+
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20 lg:pb-0">
             {hasActiveFilters && (
                 <Button
                     variant="ghost"
-                    className="w-full justify-start text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-black uppercase text-[10px] tracking-widest"
+                    className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-50 font-black uppercase text-[10px] tracking-widest h-8 px-0"
                     onClick={onClearFilters}
                 >
                     <X className="w-3 h-3 mr-2" />
@@ -40,23 +84,25 @@ function FilterContent({
                 </Button>
             )}
 
-            <Accordion type="multiple" defaultValue={['categoria', 'marca']} className="w-full">
-                {/* Categoria */}
-                <AccordionItem value="categoria" className="border-b-2">
-                    <AccordionTrigger className="text-[11px] font-black uppercase tracking-tight">Categoria</AccordionTrigger>
+            <Accordion type="multiple" defaultValue={['categoria', 'marca', 'modelo', 'serie']} className="w-full">
+
+                {/* CATEGORIA */}
+                <AccordionItem value="categoria" className="border-b border-gray-100 last:border-0">
+                    <AccordionTrigger className="text-[11px] font-black uppercase tracking-widest text-gray-700 hover:text-orange-600 hover:no-underline py-4">
+                        Categoria
+                    </AccordionTrigger>
                     <AccordionContent>
-                        <div className="space-y-3 pt-2">
-                            {data.categorias.map((cat) => (
+                        <div className="space-y-3 pt-2 pb-4">
+                            {categorias.map((cat) => (
                                 <div key={cat.id_categoria} className="flex items-center space-x-3 group">
                                     <Checkbox
                                         id={`cat-${cat.id_categoria}`}
-                                        checked={filters.id_categoria === cat.id_categoria}
-                                        onCheckedChange={(checked) =>
-                                            onFilterChange('id_categoria', checked ? cat.id_categoria : null)
-                                        }
-                                        className="border-2 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                        // CORREÇÃO: Usando o helper seguro
+                                        checked={isChecked(filters.id_categoria, cat.id_categoria)}
+                                        onCheckedChange={(checked) => toggleFilter('id_categoria', cat.id_categoria, checked)}
+                                        className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                                     />
-                                    <Label htmlFor={`cat-${cat.id_categoria}`} className="text-xs font-bold text-gray-600 cursor-pointer group-hover:text-orange-600 transition-colors uppercase">
+                                    <Label htmlFor={`cat-${cat.id_categoria}`} className="text-xs font-bold text-gray-500 cursor-pointer group-hover:text-orange-600 uppercase">
                                         {cat.ds_categoria}
                                     </Label>
                                 </div>
@@ -65,24 +111,22 @@ function FilterContent({
                     </AccordionContent>
                 </AccordionItem>
 
-                {/* Marca */}
-                <AccordionItem value="marca" className="border-b-2">
-                    <AccordionTrigger className="text-[11px] font-black uppercase tracking-tight">Marca</AccordionTrigger>
+                {/* MARCA */}
+                <AccordionItem value="marca" className="border-b border-gray-100 last:border-0">
+                    <AccordionTrigger className="text-[11px] font-black uppercase tracking-widest text-gray-700 hover:text-orange-600 hover:no-underline py-4">
+                        Marca
+                    </AccordionTrigger>
                     <AccordionContent>
-                        <div className="space-y-3 pt-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                            {data.marcas.map((marca) => (
+                        <div className="space-y-3 pt-2 pb-4 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                            {marcas.map((marca) => (
                                 <div key={marca.id_marca} className="flex items-center space-x-3 group">
                                     <Checkbox
                                         id={`marca-${marca.id_marca}`}
-                                        checked={filters.id_marca === marca.id_marca}
-                                        onCheckedChange={(checked) => {
-                                            onFilterChange('id_marca', checked ? marca.id_marca : null);
-                                            onFilterChange('id_serie', null);
-                                            onFilterChange('id_modelo', null);
-                                        }}
-                                        className="border-2 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                        checked={isChecked(filters.id_marca, marca.id_marca)}
+                                        onCheckedChange={(checked) => toggleFilter('id_marca', marca.id_marca, checked)}
+                                        className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                                     />
-                                    <Label htmlFor={`marca-${marca.id_marca}`} className="text-xs font-bold text-gray-600 cursor-pointer group-hover:text-orange-600 uppercase">
+                                    <Label htmlFor={`marca-${marca.id_marca}`} className="text-xs font-bold text-gray-500 cursor-pointer group-hover:text-orange-600 uppercase">
                                         {marca.ds_marca}
                                     </Label>
                                 </div>
@@ -91,115 +135,99 @@ function FilterContent({
                     </AccordionContent>
                 </AccordionItem>
 
-                {/* Série - Dependente da Marca */}
-                <AccordionItem value="serie" disabled={!filters.id_marca} className="border-b-2">
-                    <AccordionTrigger className={`text-[11px] font-black uppercase tracking-tight ${!filters.id_marca ? 'opacity-30' : ''}`}>
-                        Série
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        <div className="space-y-3 pt-2">
-                            {data.series
-                                .filter(s => s.id_marca === filters.id_marca)
-                                .map((serie) => (
+                {/* SÉRIE */}
+                {filters.id_marca?.length > 0 && filteredSeries.length > 0 && (
+                    <AccordionItem value="serie" className="border-b border-gray-100 last:border-0">
+                        <AccordionTrigger className="text-[11px] font-black uppercase tracking-widest text-gray-700 hover:text-orange-600 hover:no-underline py-4">
+                            Série
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <div className="space-y-3 pt-2 pb-4 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                                {filteredSeries.map((serie) => (
                                     <div key={serie.id_serie} className="flex items-center space-x-3 group">
                                         <Checkbox
                                             id={`serie-${serie.id_serie}`}
-                                            checked={filters.id_serie === serie.id_serie}
-                                            onCheckedChange={(checked) => {
-                                                onFilterChange('id_serie', checked ? serie.id_serie : null);
-                                                onFilterChange('id_modelo', null);
-                                            }}
-                                            className="border-2 data-[state=checked]:bg-orange-500"
+                                            checked={isChecked(filters.id_serie, serie.id_serie)}
+                                            onCheckedChange={(checked) => toggleFilter('id_serie', serie.id_serie, checked)}
+                                            className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                                         />
-                                        <Label htmlFor={`serie-${serie.id_serie}`} className="text-xs font-bold text-gray-600 cursor-pointer uppercase">
+                                        <Label htmlFor={`serie-${serie.id_serie}`} className="text-xs font-bold text-gray-500 cursor-pointer group-hover:text-orange-600 uppercase">
                                             {serie.ds_serie}
                                         </Label>
                                     </div>
                                 ))}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                )}
+
+                {/* MODELO */}
+                <AccordionItem value="modelo" className="border-b border-gray-100 last:border-0">
+                    <AccordionTrigger className="text-[11px] font-black uppercase tracking-widest text-gray-700 hover:text-orange-600 hover:no-underline py-4">
+                        Modelo
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <div className="space-y-3 pt-2 pb-4 max-h-60 overflow-y-auto custom-scrollbar pr-2">
+                            {(!filters.id_marca || filters.id_marca.length === 0) ? (
+                                <p className="text-[10px] text-gray-400 italic">Selecione uma marca para ver os modelos.</p>
+                            ) : filteredModels.length === 0 ? (
+                                <p className="text-[10px] text-gray-400 italic">Nenhum modelo encontrado para os filtros atuais.</p>
+                            ) : (
+                                filteredModels.map((mod) => (
+                                    <div key={mod.id_modelo} className="flex items-center space-x-3 group">
+                                        <Checkbox
+                                            id={`mod-${mod.id_modelo}`}
+                                            checked={isChecked(filters.id_modelo, mod.id_modelo)}
+                                            onCheckedChange={(checked) => toggleFilter('id_modelo', mod.id_modelo, checked)}
+                                            className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                        />
+                                        <Label htmlFor={`mod-${mod.id_modelo}`} className="text-xs font-bold text-gray-500 cursor-pointer group-hover:text-orange-600 uppercase">
+                                            {mod.ds_modelo}
+                                        </Label>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </AccordionContent>
                 </AccordionItem>
 
-                {/* Modelo - Dependente da Série */}
-                <AccordionItem value="modelo" disabled={!filters.id_serie} className="border-b-0">
-                    <AccordionTrigger className={`text-[11px] font-black uppercase tracking-tight ${!filters.id_serie ? 'opacity-30' : ''}`}>
-                        Modelo
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        <div className="space-y-3 pt-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                            {data.modelos
-                                .filter(m => m.id_serie === filters.id_serie)
-                                .map((mod) => (
-                                    <div key={mod.id_modelo} className="flex items-center space-x-3 group">
-                                        <Checkbox
-                                            id={`mod-${mod.id_modelo}`}
-                                            checked={filters.id_modelo === mod.id_modelo}
-                                            onCheckedChange={(checked) =>
-                                                onFilterChange('id_modelo', checked ? mod.id_modelo : null)
-                                            }
-                                            className="border-2 data-[state=checked]:bg-orange-500"
-                                        />
-                                        <Label htmlFor={`mod-${mod.id_modelo}`} className="text-xs font-bold text-gray-600 cursor-pointer uppercase">
-                                            {mod.ds_modelo}
-                                        </Label>
-                                    </div>
-                                ))}
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
             </Accordion>
         </div>
     );
 }
 
-export default function ProductFilters({ filters, onFilterChange, onClearFilters }) {
-    // Sincronizado com os nomes das entidades em plural no MysqlServer.js
-    const { data: categorias = [] } = useQuery({ queryKey: ['TodasCategorias'], queryFn: () => __ddmDatabase.entities.Categoria.list() });
-    const { data: marcas = [] } = useQuery({ queryKey: ['TodasMarcas'], queryFn: () => __ddmDatabase.entities.Marca.list() });
-    const { data: series = [] } = useQuery({ queryKey: ['TodasSeries'], queryFn: () => __ddmDatabase.entities.Series.list() });
-    const { data: modelos = [] } = useQuery({ queryKey: ['TodosModelos'], queryFn: () => __ddmDatabase.entities.Modelos.list() });
-
-    const combinedData = { categorias, marcas, series, modelos };
-
+export default function ProductFilters(props) {
+    // ... (o restante do componente ProductFilters exportado permanece igual)
+    // Apenas copiei o FilterContent acima que tem a lógica
     return (
         <>
-            {/* Desktop Side Bar */}
-            <div className="hidden lg:block bg-white rounded-2xl shadow-sm border-2 border-gray-100 p-6 h-fit sticky top-24">
-                <div className="flex items-center gap-2 mb-6 pb-4 border-b-2 border-gray-50">
-                    <Filter className="w-4 h-4 text-orange-500" />
-                    <h3 className="font-black text-xs uppercase tracking-widest text-gray-900">Filtrar Peças</h3>
-                </div>
-                <FilterContent
-                    filters={filters}
-                    onFilterChange={onFilterChange}
-                    onClearFilters={onClearFilters}
-                    data={combinedData}
-                />
+            <div className="hidden lg:block">
+                <FilterContent {...props} />
             </div>
-
-            {/* Mobile Sheet */}
-            <div className="lg:hidden mb-4">
+            <div className="lg:hidden w-full mb-6">
                 <Sheet>
                     <SheetTrigger asChild>
-                        <Button variant="outline" className="w-full border-2 font-bold uppercase text-[10px] tracking-widest h-11">
-                            <Filter className="w-4 h-4 mr-2 text-orange-500" />
-                            Refinar Busca
+                        <Button variant="outline" className="w-full bg-white border border-gray-200 text-gray-700 font-black uppercase text-[10px] tracking-widest h-12 shadow-sm flex items-center justify-center gap-2">
+                            <Filter className="w-4 h-4 text-orange-500" />
+                            Filtrar Produtos
                         </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="w-[300px] sm:w-80 overflow-y-auto border-r-4 border-orange-500">
-                        <SheetHeader className="border-b pb-4">
-                            <SheetTitle className="flex items-center gap-2 font-black uppercase text-sm">
-                                <Filter className="w-5 h-5 text-orange-500" />
+                    <SheetContent side="left" className="w-[300px] border-r border-gray-100 p-6 overflow-y-auto z-[9999]">
+                        <SheetHeader className="border-b border-gray-100 pb-6 mb-6">
+                            <SheetTitle className="flex items-center gap-3 font-black uppercase text-sm tracking-widest text-gray-900">
+                                <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                                    <Filter className="w-4 h-4 text-orange-600" />
+                                </div>
                                 Filtros
                             </SheetTitle>
                         </SheetHeader>
-                        <div className="mt-6">
-                            <FilterContent
-                                filters={filters}
-                                onFilterChange={onFilterChange}
-                                onClearFilters={onClearFilters}
-                                data={combinedData}
-                            />
+                        <FilterContent {...props} />
+                        <div className="mt-6 sticky bottom-0 bg-white pt-4 border-t border-gray-100">
+                            <SheetClose asChild>
+                                <Button className="w-full bg-gray-900 text-white font-bold uppercase text-xs h-10">
+                                    Ver Resultados
+                                </Button>
+                            </SheetClose>
                         </div>
                     </SheetContent>
                 </Sheet>

@@ -43,7 +43,7 @@
   * {
     @apply border-border;
   }
-  
+
   html, body, #root {
     height: 100%;
     width: 100%;
@@ -77,7 +77,7 @@
   .font-industrial-title {
     @apply font-black uppercase italic tracking-tighter;
   }
-  
+
   .font-industrial-label {
     @apply font-black uppercase text-[10px] tracking-widest text-gray-400;
   }
@@ -88,4 +88,41 @@
   animation-duration: 500ms;
   animation-fill-mode: forwards;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Efeitos 3D para o Cartão de Crédito --- */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* --- Scrollbar Personalizada para o Resumo --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

@@ -31,28 +31,29 @@ export default function ShippingCalculator({
 
         setError('');
         setLoading(true);
-        
+
         try {
-            // Rota de cálculo que deve estar no seu server.js
+            // Nota: Se sua API Base já tiver '/api', ajuste aqui.
+            // Geralmente __ddmDatabase.BASE_URL é algo como 'http://localhost:3001/api'
             const response = await fetch(`${__ddmDatabase.BASE_URL}/frete/calcular`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     cep_destino: cleanCep,
-                    id_produto: id_produto,
-                    nu_peso: nu_peso 
+                    items: [{ id_produto, quantidade: 1, nu_peso }] // Ajustei estrutura para bater com server
                 })
             });
 
             if (!response.ok) throw new Error('Erro ao calcular frete');
-            
+
             const results = await response.json();
             setOptions(results);
-            
+
             if (onSelectShipping && results.length > 0) {
                 onSelectShipping(results[0]);
             }
         } catch (err) {
+            console.error(err);
             setError('Serviço indisponível para este CEP no momento.');
             setOptions([]);
         } finally {
@@ -121,21 +122,21 @@ export default function ShippingCalculator({
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3">Opções Disponíveis</p>
                     {options.map((option) => (
                         <button
-                            key={option.id_transportadora_servicos}
+                            key={option.id} // CORRIGIDO: Usa 'id' que vem do server.js
                             onClick={() => onSelectShipping && onSelectShipping(option)}
                             className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between group ${
-                                selectedShipping?.id_transportadora_servicos === option.id_transportadora_servicos
+                                selectedShipping?.id === option.id
                                     ? 'border-orange-500 bg-orange-50/30'
                                     : 'border-gray-50 bg-gray-50 hover:border-gray-200'
                             }`}
                         >
                             <div className="flex items-center gap-3">
                                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    selectedShipping?.id_transportadora_servicos === option.id_transportadora_servicos
-                                        ? 'border-orange-500 bg-orange-500' 
+                                    selectedShipping?.id === option.id
+                                        ? 'border-orange-500 bg-orange-500'
                                         : 'border-gray-300'
                                 }`}>
-                                    {selectedShipping?.id_transportadora_servicos === option.id_transportadora_servicos && (
+                                    {selectedShipping?.id === option.id && (
                                         <CheckCircle2 className="w-3 h-3 text-white" />
                                     )}
                                 </div>
