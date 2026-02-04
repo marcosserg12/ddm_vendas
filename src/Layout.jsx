@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query"; // Importante para o contador
 import {
   Menu, Phone, Mail, MapPin, ShoppingCart, ChevronDown, User, LogOut,
   ChevronRight, Factory, Clock, Wrench, Shield, LayoutDashboard
@@ -10,17 +11,18 @@ import {
 } from "./Components/ui/dropdown-menu";
 import MobileDrawer from "./Components/layout/MobileDrawer";
 
-// --- IMPORTAÇÃO DA LOGO ---
+// --- API E ASSETS ---
+import { __ddmDatabase } from "./api/MysqlServer";
 import LogoDDM from "./assets/imgs/logo_ddm.png";
 
 export default function Layout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
   const [user, setUser] = useState(null);
 
   const location = useLocation();
   const navigate = useNavigate();
 
+  // 1. CARREGAR USUÁRIO
   useEffect(() => {
     const storedUser = localStorage.getItem("ddm_user");
     if (storedUser) {
@@ -28,17 +30,50 @@ export default function Layout({ children }) {
     }
   }, []);
 
-  const loadCartCount = () => {
-    const cart = JSON.parse(localStorage.getItem("ddm_cart") || "[]");
-    const count = cart.reduce((sum, item) => sum + item.quantidade, 0);
-    setCartCount(count);
-  };
+  // 2. LÓGICA DO CONTADOR HÍBRIDO (Reage em tempo real)
+  const { data: cartItems = [] } = useQuery({
+    queryKey: ['cartItemsHybrid'],
+    // placeholderData evita que o contador suma/vire 0 enquanto carrega do banco
+    placeholderData: (previousData) => previousData,
+    queryFn: async () => {
+      const user = JSON.parse(localStorage.getItem('ddm_user'));
+      const sessionId = localStorage.getItem('ddm_session');
 
-  useEffect(() => {
-    loadCartCount();
-    window.addEventListener("cartUpdated", loadCartCount);
-    return () => window.removeEventListener("cartUpdated", loadCartCount);
-  }, []);
+      // 1. Criamos a URL com os parâmetros de consulta (Query Params)
+      // O backend que você ajustou agora espera receber isso via URL
+      const params = new URLSearchParams();
+      if (user?.id_usuario) params.append('id_usuario', user.id_usuario);
+      if (sessionId) params.append('session_id', sessionId);
+
+      try {
+          const response = await fetch(`http://localhost:3001/api/carrinho?${params.toString()}`);
+          
+          if (!response.ok) throw new Error('Falha na rede');
+          
+          const serverItems = await response.json();
+
+          // 2. Retornamos os itens do servidor. 
+          // Se o servidor retornar vazio [], o ícone mostrará 0.
+          // Se encontrar pela sessão (mesmo deslogado), o ícone mostrará a quantidade correta.
+          return serverItems.map(item => ({
+              ...item,
+              // Garante que o front entenda o ID vindo do MySQL
+              id_carrinho: item.id_item_carrinho || item.id_carrinho 
+          }));
+
+      } catch (e) {
+          console.error("Erro ao carregar carrinho persistente:", e);
+          // Fallback: se o banco cair, tentamos mostrar o que houver no local 
+          // apenas para o usuário não ver um carrinho vazio por erro de rede.
+          return JSON.parse(localStorage.getItem('ddm_cart') || '[]');
+      }
+    }
+  });
+
+  // 3. CÁLCULO TOTAL (Soma das quantidades de cada peça)
+  const totalCartItems = cartItems.reduce((sum, item) => 
+    sum + (Number(item.nu_quantidade || item.quantidade || 0)), 0
+  );
 
   const handleLogout = () => {
     localStorage.removeItem("ddm_token");
@@ -62,6 +97,48 @@ export default function Layout({ children }) {
     { name: "Quem Somos", path: "/quem-somos" },
     { name: "Contato", path: "/contato" },
   ];
+
+  const syncCartMutation = useMutation({
+    mutationFn: async ({ id_usuario, localItems }) => {
+        for (const item of localItems) {
+            await fetch('http://localhost:3001/api/carrinho', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  id_usuario: id_usuario,
+                  session_id: localStorage.getItem('ddm_session'), // OBRIGATÓRIO
+                  id_produto: item.id_produto,
+                  nu_quantidade: item.nu_quantidade || item.quantidade,
+                  nu_preco_unitario: item.nu_preco_unitario,
+                  ds_nome: item.ds_nome,
+                  nu_ddm: item.nu_ddm,
+                  url_imagem: item.url_imagem
+              })
+            });
+        }
+        localStorage.removeItem('ddm_cart');
+    },
+    onSuccess: () => {
+        // Isso aqui vai fazer o número do ícone pular de 10 para 12 na hora!
+        queryClient.invalidateQueries({ queryKey: ['cartItemsHybrid'] });
+        window.dispatchEvent(new Event('cartUpdated'));
+    }
+  });
+
+// Efeito que vigia o Login
+useEffect(() => {
+    const userStr = localStorage.getItem('ddm_user');
+    const cartStr = localStorage.getItem('ddm_cart');
+
+    if (userStr && cartStr) {
+        const loggedUser = JSON.parse(userStr);
+        const localItems = JSON.parse(cartStr);
+
+        if (loggedUser?.id_usuario && localItems.length > 0) {
+            syncCartMutation.mutate({ id_usuario: loggedUser.id_usuario, localItems });
+        }
+    }
+}, [user]);
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans">
@@ -162,9 +239,9 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-4">
               <Link to="/carrinho" className="relative group w-10 h-10 flex items-center justify-center rounded-xl hover:bg-gray-50 transition-colors">
                 <ShoppingCart className="w-5 h-5 text-gray-700 group-hover:text-orange-600 transition-colors" />
-                {cartCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-orange-600 text-white text-[9px] rounded-full flex items-center justify-center font-bold ring-2 ring-white">
-                    {cartCount}
+                {totalCartItems > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-orange-600 text-white text-[9px] rounded-full flex items-center justify-center font-bold ring-2 ring-white animate-in zoom-in duration-300">
+                    {totalCartItems}
                   </span>
                 )}
               </Link>

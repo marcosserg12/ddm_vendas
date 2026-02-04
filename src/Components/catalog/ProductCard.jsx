@@ -6,7 +6,13 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { getFullImageUrl, __ddmDatabase } from '../../api/MysqlServer';
 
+// 1. Importação essencial para atualizar o Layout em tempo real
+import { useQueryClient } from '@tanstack/react-query';
+
 export default function ProductCard({ product, viewMode = 'grid' }) {
+    // 2. Inicialização do Query Client
+    const queryClient = useQueryClient();
+
     const [quantity, setQuantity] = useState(1);
     const [isAdded, setIsAdded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -28,57 +34,75 @@ export default function ProductCard({ product, viewMode = 'grid' }) {
         setIsLoading(true);
 
         const user = JSON.parse(localStorage.getItem('ddm_user'));
+        const sessionId = localStorage.getItem('ddm_session');
 
-        // PAYLOAD COMPLETO PARA O BACKEND E LOCAL
+        // PAYLOAD COMPLETO
         const productPayload = {
             id_produto: product.id_produto,
             ds_nome: product.ds_nome,
             nu_ddm: product.nu_ddm,
-            ds_marca: product.ds_marca, // Importante se tiver
+            ds_marca: product.ds_marca,
             url_imagem: product.url_imagem,
             nu_preco_unitario: product.nu_preco_venda_atual,
             nu_peso: product.nu_peso || 0.5,
             nu_quantidade: quantity,
-            quantidade: quantity // Compatibilidade
+            quantidade: quantity 
         };
 
-        // 1. ATUALIZAÇÃO LOCAL (Visual Imediato)
+        // --- 1. LÓGICA DE PERSISTÊNCIA INTELIGENTE ---
         try {
-            const currentCart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
-            const existingIndex = currentCart.findIndex(item => String(item.id_produto) === String(product.id_produto));
-
-            if (existingIndex > -1) {
-                currentCart[existingIndex].quantidade += quantity;
-                currentCart[existingIndex].nu_quantidade += quantity;
+            if (user?.id_usuario) {
+                // SE ESTIVER LOGADO: 
+                // 1. Limpamos o lixo do localStorage para evitar que o "useEffect de sincronização" duplique os itens
+                localStorage.removeItem('ddm_cart');
             } else {
-                currentCart.push({
-                    ...productPayload,
-                    id_carrinho: `local_${Date.now()}` // ID Temporário
-                });
+                // SE FOR VISITANTE:
+                // Gravamos no localStorage normalmente
+                const currentCart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
+                const existingIndex = currentCart.findIndex(item => String(item.id_produto) === String(product.id_produto));
+
+                if (existingIndex > -1) {
+                    currentCart[existingIndex].quantidade += quantity;
+                    currentCart[existingIndex].nu_quantidade += quantity;
+                } else {
+                    currentCart.push({
+                        ...productPayload,
+                        id_carrinho: `local_${Date.now()}`
+                    });
+                }
+                localStorage.setItem('ddm_cart', JSON.stringify(currentCart));
             }
-            localStorage.setItem('ddm_cart', JSON.stringify(currentCart));
+            
+            // Avisa componentes legados
             window.dispatchEvent(new Event('cartUpdated'));
         } catch (localError) {
-            console.error("Erro LocalStorage:", localError);
+            console.error("Erro no processamento local:", localError);
         }
 
-        // 2. SINCRONIZAÇÃO COM O BANCO (Se logado)
-        if (user && user.id_usuario) {
-            try {
-                await __ddmDatabase.entities.Carrinho.add({
-                    id_usuario: user.id_usuario,
+        // --- 2. SINCRONIZAÇÃO COM O BANCO (MYSQL) ---
+        try {
+            const response = await fetch('http://localhost:3001/api/carrinho', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id_usuario: user?.id_usuario || null,
                     id_produto: product.id_produto,
-                    session_id: 'guest',
-                    // Envia TODOS os campos para não ficar NULL no banco
+                    session_id: sessionId,
                     ds_nome: product.ds_nome,
                     nu_ddm: product.nu_ddm,
                     url_imagem: product.url_imagem,
                     nu_quantidade: quantity,
                     nu_preco_unitario: product.nu_preco_venda_atual
-                });
-            } catch (serverError) {
-                console.warn("Erro ao salvar no servidor (mas salvo localmente):", serverError);
+                })
+            });
+
+            if (response.ok) {
+                // 3. ATUALIZAÇÃO GLOBAL
+                // Como você está logado, o Layout e o Carrinho vão ler do banco através desta invalidação
+                queryClient.invalidateQueries({ queryKey: ['cartItemsHybrid'] });
             }
+        } catch (serverError) {
+            console.warn("⚠️ Falha ao salvar no MySQL:", serverError);
         }
 
         setIsLoading(false);
@@ -93,6 +117,7 @@ export default function ProductCard({ product, viewMode = 'grid' }) {
 
     const hasStock = (Number(product.nu_estoque_atual) || 0) > 0;
 
+    // --- RENDERIZAÇÃO GRID ---
     if (viewMode === 'grid') {
         return (
             <div className="group bg-white rounded-xl border border-gray-200/60 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col h-full overflow-hidden w-full">
@@ -120,7 +145,7 @@ export default function ProductCard({ product, viewMode = 'grid' }) {
                                     <span className="text-xs md:text-sm font-black text-gray-900 tabular-nums">{quantity}</span>
                                     <button onClick={(e) => handleQuantity(e, 'inc')} className="w-8 h-full flex items-center justify-center text-gray-400 hover:text-orange-600 active:scale-90"><Plus className="w-3 h-3" /></button>
                                 </div>
-                                <Button onClick={handleAddToCart} disabled={isLoading} className={`w-full h-9 md:h-10 rounded-lg font-black uppercase text-[10px] md:text-[px] tracking-widest transition-all shadow-sm ${isAdded ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 hover:bg-orange-600 text-white'}`}>
+                                <Button onClick={handleAddToCart} disabled={isLoading} className={`w-full h-9 md:h-10 rounded-lg font-black uppercase text-[10px] tracking-widest transition-all shadow-sm ${isAdded ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-900 hover:bg-orange-600 text-white'}`}>
                                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin"/> : isAdded ? <div className="flex items-center gap-1.5 animate-in fade-in zoom-in"><Check className="w-3.5 h-3.5" /> <span>Adicionado</span></div> : <div className="flex items-center gap-1.5"><ShoppingCart className="w-3.5 h-3.5" /> <span>Carrinho</span></div>}
                                 </Button>
                             </div>
@@ -131,6 +156,7 @@ export default function ProductCard({ product, viewMode = 'grid' }) {
         );
     }
 
+    // --- RENDERIZAÇÃO LISTA ---
     return (
         <div className="group bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-orange-200 transition-all duration-300 flex flex-row overflow-hidden w-full h-auto min-h-[140px]">
             <Link to={`/produto?id=${product.id_produto}`} className="w-28 sm:w-48 bg-white border-r border-gray-100 p-2 sm:p-4 flex items-center justify-center shrink-0 relative">

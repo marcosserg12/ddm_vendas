@@ -19,13 +19,13 @@ import ResponsiveSpecsTable from '../Components/product/ResponsiveSpecsTable';
 
 export default function Produto() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const urlParams = new URLSearchParams(window.location.search);
     const productId = urlParams.get('id');
 
     const [quantity, setQuantity] = useState(1);
     const [addedToCart, setAddedToCart] = useState(false);
     const [selectedShipping, setSelectedShipping] = useState(null);
-    const queryClient = useQueryClient();
 
     // 1. Busca Dados Gerais do Produto
     const { data: product, isLoading: isLoadingProduct } = useQuery({
@@ -65,36 +65,70 @@ export default function Produto() {
     // 5. Lógica de Adicionar ao Carrinho
     const addToCartMutation = useMutation({
         mutationFn: async () => {
+            const user = JSON.parse(localStorage.getItem('ddm_user'));
+            const sessionId = localStorage.getItem('ddm_session');
+
+            // Padronização do objeto
             const cartItem = {
                 id_produto: product.id_produto,
                 ds_nome: product.ds_nome,
                 nu_ddm: product.nu_ddm,
                 url_imagem: product.url_imagem,
-                quantidade: quantity,
+                nu_quantidade: quantity,
+                quantidade: quantity, 
                 nu_preco_unitario: product.nu_preco_venda_atual,
                 nu_peso: product.nu_peso || 0.5
             };
 
-            const currentCart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
-            const existingIndex = currentCart.findIndex(item => item.id_produto === product.id_produto);
-
-            if (existingIndex > -1) {
-                currentCart[existingIndex].quantidade += quantity;
+            // --- 1. GESTÃO DE PERSISTÊNCIA (O AJUSTE ESTÁ AQUI) ---
+            if (user?.id_usuario) {
+                // Se o usuário está LOGADO, não queremos lixo no localStorage
+                // Limpamos para garantir que a sincronização automática não duplique nada
+                localStorage.removeItem('ddm_cart');
             } else {
-                currentCart.push(cartItem);
+                // Se for VISITANTE, salvamos no local normalmente
+                const currentCart = JSON.parse(localStorage.getItem('ddm_cart') || '[]');
+                const existingIndex = currentCart.findIndex(item => String(item.id_produto) === String(product.id_produto));
+
+                if (existingIndex > -1) {
+                    currentCart[existingIndex].nu_quantidade += quantity;
+                    currentCart[existingIndex].quantidade += quantity;
+                } else {
+                    currentCart.push({ ...cartItem, id_carrinho: `local_${Date.now()}` });
+                }
+                localStorage.setItem('ddm_cart', JSON.stringify(currentCart));
             }
 
-            localStorage.setItem('ddm_cart', JSON.stringify(currentCart));
-            window.dispatchEvent(new Event('cartUpdated'));
-
-            await new Promise(resolve => setTimeout(resolve, 500));
-            return true;
+            // --- 2. SALVAR NO BANCO (MySQL) ---
+            // O fetch continua sendo enviado, pois ele é a nossa fonte principal agora
+            try {
+                await fetch('http://localhost:3001/api/carrinho', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id_usuario: user?.id_usuario || null,
+                        id_produto: product.id_produto,
+                        session_id: sessionId,
+                        ds_nome: product.ds_nome,
+                        nu_ddm: product.nu_ddm,
+                        url_imagem: product.url_imagem,
+                        nu_quantidade: quantity,
+                        nu_preco_unitario: product.nu_preco_venda_atual
+                    })
+                });
+            } catch (err) {
+                console.warn("Offline: Salvo apenas localmente");
+            }
         },
         onSuccess: () => {
             setAddedToCart(true);
             toast.success('Peça adicionada ao carrinho!');
+            
+            // ESSENCIAL: Invalida a query do Layout para o número atualizar na hora
+            queryClient.invalidateQueries({ queryKey: ['cartItemsHybrid'] });
+            
+            window.dispatchEvent(new Event('cartUpdated'));
             setTimeout(() => setAddedToCart(false), 2000);
-            queryClient.invalidateQueries({ queryKey: ['cartItems'] });
         }
     });
 

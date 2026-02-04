@@ -21,6 +21,12 @@ function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
     window.scrollTo(0, 0);
+    let sessionId = localStorage.getItem('ddm_session');
+    if (!sessionId) {
+        // Gera um ID único baseado no tempo e um número aleatório
+        sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('ddm_session', sessionId);
+    }
   }, [pathname]);
   return null;
 }

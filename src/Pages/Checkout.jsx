@@ -143,20 +143,14 @@ export default function Checkout() {
     });
 
     const { data: cartItems = [] } = useQuery({
-        queryKey: ['cartItems', user?.id_usuario, sessionId],
-        queryFn: async () => {
-            try {
-                const all = await __ddmDatabase.entities.Carrinho.list();
-                if (!Array.isArray(all)) return [];
-                return user?.id_usuario
-                    ? all.filter(i => i.id_usuario === user.id_usuario)
-                    : all.filter(i => i.session_id === sessionId);
-            } catch (error) {
-                console.error("Erro ao buscar carrinho:", error);
-                return [];
-            }
-        }
-    });
+    queryKey: ['cartItemsHybrid'], // CHAVE IGUAL AO LAYOUT E PRODUCTCARD
+    queryFn: async () => {
+        const all = await __ddmDatabase.entities.Carrinho.list();
+        return user?.id_usuario 
+            ? all.filter(i => i.id_usuario === user.id_usuario) 
+            : all.filter(i => i.session_id === sessionId);
+    }
+});
 
     // Efeito para selecionar endereço automaticamente se só houver 1
     useEffect(() => {
@@ -198,29 +192,39 @@ export default function Checkout() {
 
     const createOrderMutation = useMutation({
         mutationFn: async () => {
+            // Simulação de processamento de gateway
             await new Promise(resolve => setTimeout(resolve, 2000));
+            
             const numeroVenda = `DDM${Date.now().toString().slice(-6)}`;
+            const totalComFrete = subtotal + shippingCost;
+            const totalFinal = paymentMethod === 'pix' ? totalComFrete * 0.95 : totalComFrete;
+
             const vendaData = {
                 id_usuario: user.id_usuario,
                 nu_nota_fiscal: numeroVenda,
-                nu_valor_total_nota: paymentMethod === 'pix' ? total * 0.95 : total,
+                nu_valor_total_nota: totalFinal,
                 ds_forma_pagamento: paymentMethod,
                 st_venda: 'Pendente',
                 dt_venda: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                id_usuario_endereco: selectedAddress.id_usuario_endereco // Vincula o endereço
             };
 
+            // Grava no banco de dados através da sua API
             await __ddmDatabase.entities.Vendas.create(vendaData);
 
+            // Limpa os itens do carrinho no banco para este usuário
             for (const item of cartItems) {
                 await __ddmDatabase.entities.Carrinho.delete(item.id_carrinho);
             }
-            window.dispatchEvent(new Event('cartUpdated'));
+            
             return numeroVenda;
         },
         onSuccess: (numero) => {
             setOrderNumber(numero);
             setOrderComplete(true);
-            queryClient.invalidateQueries({ queryKey: ['cartItems'] });
+            // ATUALIZA O CONTADOR DO HEADER AUTOMATICAMENTE
+            queryClient.invalidateQueries({ queryKey: ['cartItemsHybrid'] });
+            window.dispatchEvent(new Event('cartUpdated'));
         }
     });
 
@@ -334,15 +338,14 @@ export default function Checkout() {
                                                 <div className="space-y-2 col-span-1">
                                                     <Label className="text-[10px] font-bold uppercase text-gray-500">Cidade</Label>
                                                     <div className="relative">
-                                                        <select
+                                                        <select 
+                                                            disabled={!newAddress.id_uf || municipios.length === 0}
                                                             value={newAddress.id_municipio}
-                                                            onChange={(e) => setNewAddress({...newAddress, id_municipio: e.target.value})}
-                                                            disabled={!newAddress.id_uf || loadingMunicipios}
-                                                            className="w-full h-11 px-3 rounded-md border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
+                                                            onChange={e => setNewAddress({...newAddress, id_municipio: e.target.value})}
                                                         >
-                                                            <option value="">Selecione...</option>
-                                                            {municipios.map(city => (
-                                                                <option key={city.id_municipio} value={city.id_municipio}>{city.ds_cidade}</option>
+                                                            <option value="">{loadingMunicipios ? 'Carregando...' : 'Selecione a Cidade'}</option>
+                                                            {municipios.map(m => (
+                                                                <option key={m.id_municipio} value={m.id_municipio}>{m.ds_cidade}</option>
                                                             ))}
                                                         </select>
                                                         {loadingMunicipios && (
