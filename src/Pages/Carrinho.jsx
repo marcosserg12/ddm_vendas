@@ -75,9 +75,8 @@ export default function Carrinho() {
         mutationFn: async ({ item, newQuantity }) => {
             updateLocalCart(item.id_produto, newQuantity);
 
-            const user = JSON.parse(localStorage.getItem('ddm_user'));
             // Se o item vem do banco (id_carrinho não começa com local_)
-            if (user && item.id_carrinho && !String(item.id_carrinho).startsWith('local_')) {
+            if (item.id_carrinho && !String(item.id_carrinho).startsWith('local_')) {
                 if (newQuantity <= 0) {
                     await __ddmDatabase.entities.Carrinho.delete(item.id_carrinho);
                 } else {
@@ -96,8 +95,7 @@ export default function Carrinho() {
         mutationFn: async (item) => {
             updateLocalCart(item.id_produto, 0); 
 
-            const user = JSON.parse(localStorage.getItem('ddm_user'));
-            if (user && item.id_carrinho && !String(item.id_carrinho).startsWith('local_')) {
+            if (item.id_carrinho && !String(item.id_carrinho).startsWith('local_')) {
                 await __ddmDatabase.entities.Carrinho.delete(item.id_carrinho);
             }
         },
