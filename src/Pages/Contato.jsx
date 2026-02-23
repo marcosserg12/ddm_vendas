@@ -181,7 +181,11 @@ export default function Contato() {
                                             <Label className="font-black uppercase text-[10px] tracking-widest text-gray-400">Finalidade do Contato</Label>
                                             <Select value={formData.tipo} onValueChange={(val) => handleChange('tipo', val)}>
                                                 <SelectTrigger className="h-12 rounded-xl border-2 border-gray-50 bg-gray-50 text-sm font-medium">
-                                                    <SelectValue />
+                                                    <SelectValue placeholder="Selecione a finalidade">
+                                                        {formData.tipo === 'catalogo' && "Dúvida sobre Peças de Catálogo"}
+                                                        {formData.tipo === 'personalizado' && "Desenvolvimento Sob Medida"}
+                                                        {formData.tipo === 'vendas' && "Cotação de Grande Volume"}
+                                                    </SelectValue>
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="catalogo">Dúvida sobre Peças de Catálogo</SelectItem>

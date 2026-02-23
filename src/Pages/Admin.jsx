@@ -4,7 +4,7 @@ import { __ddmDatabase } from '../api/MysqlServer.js';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Package, ShoppingCart, TrendingUp,
-  DollarSign, Lock, Archive, ArrowLeft, Store // Adicionado ArrowLeft e Store
+  DollarSign, Lock, Archive, ArrowLeft, Store, Wrench // Adicionado ArrowLeft e Store
 } from 'lucide-react';
 import { Button } from '../Components/ui/button';
 import { Card, CardContent } from '../Components/ui/card';
@@ -13,6 +13,7 @@ import AdminProducts from '../Components/admin/AdminProducts';
 import AdminOrders from '../Components/admin/AdminOrders';
 import DashboardCharts from '../Components/admin/DashboardCharts';
 import AdminBoxes from '../Components/admin/AdminBoxes';
+import AdminTechnical from '../Components/admin/AdminTechnical';
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -122,6 +123,7 @@ export default function Admin() {
             <TabTrigger value="products" icon={<Package className="w-4 h-4" />} label="Produtos" />
             <TabTrigger value="orders" icon={<ShoppingCart className="w-4 h-4" />} label="Vendas" />
             <TabTrigger value="boxes" icon={<Archive className="w-4 h-4" />} label="Embalagens" />
+            <TabTrigger value="technical" icon={<Wrench className="w-4 h-4" />} label="Técnica" />
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -158,6 +160,10 @@ export default function Admin() {
              <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100">
                 <AdminBoxes />
              </div>
+          </TabsContent>
+
+          <TabsContent value="technical" className="animate-in slide-in-from-bottom-4 duration-500">
+            <AdminTechnical />
           </TabsContent>
 
         </Tabs>

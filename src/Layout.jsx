@@ -39,18 +39,8 @@ export default function Layout({ children }) {
       const user = JSON.parse(localStorage.getItem('ddm_user'));
       const sessionId = localStorage.getItem('ddm_session');
 
-      // 1. Criamos a URL com os parâmetros de consulta (Query Params)
-      // O backend que você ajustou agora espera receber isso via URL
-      const params = new URLSearchParams();
-      if (user?.id_usuario) params.append('id_usuario', user.id_usuario);
-      if (sessionId) params.append('session_id', sessionId);
-
       try {
-          const response = await fetch(`http://localhost:3001/api/carrinho?${params.toString()}`);
-          
-          if (!response.ok) throw new Error('Falha na rede');
-          
-          const serverItems = await response.json();
+          const serverItems = await __ddmDatabase.entities.Carrinho.list(user?.id_usuario, sessionId);
 
           // 2. Retornamos os itens do servidor. 
           // Se o servidor retornar vazio [], o ícone mostrará 0.

@@ -44,10 +44,10 @@ const SelectTrigger = ({ className, children }) => {
   )
 }
 
-const SelectValue = ({ placeholder }) => {
+const SelectValue = ({ placeholder, children }) => {
   const { value } = useContext(SelectContext);
-  // Aqui você pode adicionar uma lógica para traduzir o Value para o Label se necessário
-  return <span className="truncate">{value || <span className="text-gray-400">{placeholder}</span>}</span>
+  const displayValue = children || value;
+  return <span className="truncate">{displayValue || <span className="text-gray-400">{placeholder}</span>}</span>
 }
 
 const SelectContent = ({ children, className }) => {

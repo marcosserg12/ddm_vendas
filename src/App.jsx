@@ -81,11 +81,7 @@ function App() {
             </PrivateRoute>
           } />
           
-          <Route path="/checkout" element={
-            <PrivateRoute>
-              <Checkout />
-            </PrivateRoute>
-          } />
+          <Route path="/checkout" element={<Checkout />} />
 
           {/* --- ROTAS DE ACESSO / ADMIN --- */}
           <Route path="/login" element={<Login />} />

@@ -45,7 +45,14 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ["TodosProdutos"] });
       toast.success("Produto excluído com sucesso!");
     },
-    onError: () => toast.error("Erro ao excluir produto."),
+    onError: (error) => {
+      const message = error.message || "";
+      if (message.includes("foreign key") || message.includes("1451")) {
+        toast.error("Este produto não pode ser excluído pois possui registros de vendas ou outras dependências.");
+      } else {
+        toast.error("Erro ao excluir produto.");
+      }
+    },
   });
 
   // --- HANDLERS ---

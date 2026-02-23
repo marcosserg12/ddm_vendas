@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { __ddmDatabase } from '../api/MysqlServer.js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-    CreditCard, MapPin, Check, ArrowLeft, Loader2, Lock, QrCode, ShoppingBag, Plus, X
+    CreditCard, MapPin, Check, ArrowLeft, Loader2, Lock, QrCode, ShoppingBag, Plus, X, Search, User, Mail, Fingerprint, Phone, Truck
 } from 'lucide-react';
 
 import { Button } from '../Components/ui/button';
@@ -12,7 +12,7 @@ import { Label } from '../Components/ui/label';
 import { Badge } from '../Components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../Components/ui/card';
 import { RadioGroup, RadioGroupItem } from "../Components/ui/radio-group";
-import ShippingCalculator from '../Components/shipping/ShippingCalculator';
+import { toast } from 'sonner';
 
 // --- COMPONENTE VISUAL DO CARTÃO DE CRÉDITO ---
 const CreditCardVisual = ({ number, name, expiry, cvv, isFlipped }) => {
@@ -72,6 +72,22 @@ export default function Checkout() {
     const navigate = useNavigate();
     const [step, setStep] = useState(1);
 
+    // Dados do Usuário
+    const user = JSON.parse(localStorage.getItem('ddm_user'));
+    const sessionId = localStorage.getItem('ddm_session');
+
+    // --- QUERIES PRINCIPAIS ---
+    const { data: cartItems = [] } = useQuery({
+        queryKey: ['cartItemsHybrid'],
+        queryFn: () => __ddmDatabase.entities.Carrinho.list(user?.id_usuario, sessionId)
+    });
+
+    const { data: addresses = [] } = useQuery({
+        queryKey: ['userAddresses', user?.id_usuario],
+        queryFn: () => __ddmDatabase.entities.Enderecos.list(user?.id_usuario),
+        enabled: !!user?.id_usuario
+    });
+
     // Estados do Pedido
     const [selectedAddress, setSelectedAddress] = useState(null);
     const [selectedShipping, setSelectedShipping] = useState(null);
@@ -79,20 +95,60 @@ export default function Checkout() {
     const [orderComplete, setOrderComplete] = useState(false);
     const [orderNumber, setOrderNumber] = useState('');
 
-    // Estados do Novo Endereço (Modificado para usar IDs)
+    // Estados do Visitante (Dados Pessoais)
+    const [guestData, setGuestData] = useState({
+        ds_nome: '',
+        ds_email: '',
+        nu_cpf_cnpj: '',
+        nu_telefone: '',
+        ds_login: '',
+        senha: '',
+        confirmar_senha: ''
+    });
+
+    // Estados do Novo Endereço
     const [showAddressForm, setShowAddressForm] = useState(false);
+    const [searchingCep, setSearchingCep] = useState(false);
     const [newAddress, setNewAddress] = useState({
-        ds_cep: '',
-        ds_logradouro: '',
-        nu_numero: '',
+        nu_cep: '',
+        ds_endereco: '',
         ds_bairro: '',
-        id_uf: '',        // ID para o select
-        id_municipio: ''  // ID para o select
+        id_uf: '',
+        id_municipio: '',
+        ds_referencia: ''
     });
 
     // Estados do Cartão
-    const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '' });
+    const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
     const [isCardFlipped, setIsCardFlipped] = useState(false);
+
+    // --- CÁLCULOS (MEMOIZADOS) ---
+    const subtotal = React.useMemo(() => 
+        cartItems.reduce((sum, item) => sum + (Number(item.nu_preco_unitario) * item.nu_quantidade), 0)
+    , [cartItems]);
+
+    const shippingCost = selectedShipping?.preco || 0;
+    const total = React.useMemo(() => subtotal + shippingCost, [subtotal, shippingCost]);
+    const finalTotal = React.useMemo(() => paymentMethod === 'pix' ? total * 0.95 : total, [paymentMethod, total]);
+
+    const installmentOptions = React.useMemo(() => 
+        Array.from({ length: 12 }, (_, i) => {
+            const count = i + 1;
+            const value = total / count;
+            return {
+                count,
+                value,
+                label: `${count}x de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)} ${count === 1 ? 'à vista' : 'sem juros'}`
+            };
+        })
+    , [total]);
+
+    // Auto-seleciona Frete Grátis no Passo 2
+    useEffect(() => {
+        if (step === 2 && !selectedShipping) {
+            setSelectedShipping({ ds_nome_servico: 'Frete Grátis', preco: 0, prazo: '5-10' });
+        }
+    }, [step, selectedShipping]);
 
     // Formatações de Input do Cartão
     const handleCardNumber = (e) => {
@@ -106,113 +162,128 @@ export default function Checkout() {
         setCardData({ ...cardData, expiry: val });
     };
 
-    // Dados do Usuário
-    const user = JSON.parse(localStorage.getItem('ddm_user'));
-    const sessionId = localStorage.getItem('ddm_session');
+    // --- QUERIES DE DADOS AUXILIARES ---
 
-    // --- QUERIES DE DADOS AUXILIARES (Dropdowns) ---
-
-    // 1. Buscar Lista de Estados (UF)
     const { data: ufs = [] } = useQuery({
         queryKey: ['listaUfs'],
         queryFn: () => __ddmDatabase.entities.Ufs.list(),
-        staleTime: 1000 * 60 * 60 // Cache de 1 hora
+        staleTime: 1000 * 60 * 60
     });
 
-    // 2. Buscar Municípios (Depende do Estado selecionado no newAddress.id_uf)
     const { data: municipios = [], isLoading: loadingMunicipios } = useQuery({
         queryKey: ['listaMunicipios', newAddress.id_uf],
         queryFn: () => __ddmDatabase.entities.Municipios.listByUf(newAddress.id_uf),
-        enabled: !!newAddress.id_uf // Só busca se tiver uma UF selecionada
+        enabled: !!newAddress.id_uf
     });
 
-    // --- QUERIES DO CHECKOUT ---
-
-    const { data: addresses = [] } = useQuery({
-        queryKey: ['userAddresses', user?.id_usuario],
-        queryFn: async () => {
-            if (!user?.id_usuario) return [];
-            try {
-                const list = await __ddmDatabase.entities.Enderecos.list();
-                return list.filter(a => a.id_usuario === user.id_usuario);
-            } catch (error) {
-                return [];
+    // CEP Blur Handler (ViaCEP)
+    const handleCepBlur = async () => {
+        const cep = String(newAddress.nu_cep).replace(/\D/g, '');
+        if (cep.length !== 8) return;
+        setSearchingCep(true);
+        try {
+            const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await res.json();
+            if (!data.erro) {
+                const ufEncontrada = ufs.find(e => e.sg_uf === data.uf);
+                setNewAddress(prev => ({
+                    ...prev,
+                    ds_endereco: data.logradouro || '',
+                    ds_bairro: data.bairro || '',
+                    id_uf: ufEncontrada ? String(ufEncontrada.id_uf) : '',
+                    id_municipio: ''
+                }));
+                toast.success('Localização identificada!');
             }
-        },
-        enabled: !!user?.id_usuario
-    });
-
-    const { data: cartItems = [] } = useQuery({
-    queryKey: ['cartItemsHybrid'], // CHAVE IGUAL AO LAYOUT E PRODUCTCARD
-    queryFn: async () => {
-        const all = await __ddmDatabase.entities.Carrinho.list();
-        return user?.id_usuario 
-            ? all.filter(i => i.id_usuario === user.id_usuario) 
-            : all.filter(i => i.session_id === sessionId);
-    }
-});
-
-    // Efeito para selecionar endereço automaticamente se só houver 1
-    useEffect(() => {
-        if (addresses.length === 1 && !selectedAddress) {
-            setSelectedAddress(addresses[0]);
+        } catch (err) { 
+            console.error(err); 
+            toast.error('Erro ao buscar CEP');
+        } finally { 
+            setSearchingCep(false); 
         }
-    }, [addresses, selectedAddress]);
+    };
 
-    // Mutation para Criar Endereço
+    useEffect(() => {
+        if (addresses.length > 0 && !selectedAddress) {
+            // Se tiver um favorito, seleciona ele
+            const fav = addresses.find(a => a.st_entrega === 'S');
+            setSelectedAddress(fav || addresses[0]);
+        }
+    }, [addresses]);
+
     const createAddressMutation = useMutation({
-        mutationFn: async (addressData) => {
-            return await __ddmDatabase.entities.Enderecos.create({
-                ...addressData,
-                id_usuario: user.id_usuario
-            });
-        },
+        mutationFn: (addressData) => __ddmDatabase.entities.Enderecos.create({
+            ...addressData,
+            id_usuario: user.id_usuario
+        }),
         onSuccess: () => {
             queryClient.invalidateQueries(['userAddresses']);
             setShowAddressForm(false);
-            // Reseta o formulário
-            setNewAddress({ ds_cep: '', ds_logradouro: '', nu_numero: '', ds_bairro: '', id_uf: '', id_municipio: '' });
-        },
-        onError: (err) => {
-            alert("Erro ao salvar endereço: " + err.message);
+            setNewAddress({ nu_cep: '', ds_endereco: '', ds_bairro: '', id_uf: '', id_municipio: '', ds_referencia: '' });
+            toast.success('Endereço adicionado!');
         }
     });
 
-    const handleSaveAddress = () => {
-        if (!newAddress.ds_cep || !newAddress.ds_logradouro || !newAddress.nu_numero || !newAddress.id_uf || !newAddress.id_municipio) {
-            alert("Preencha todos os campos obrigatórios (incluindo Cidade e Estado)");
-            return;
-        }
-        createAddressMutation.mutate(newAddress);
-    };
-
-    const subtotal = cartItems.reduce((sum, item) => sum + (Number(item.nu_preco_unitario) * item.nu_quantidade), 0);
-    const shippingCost = selectedShipping?.preco || 0;
-    const total = subtotal + shippingCost;
-
     const createOrderMutation = useMutation({
         mutationFn: async () => {
-            // Simulação de processamento de gateway
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
+            let currentUserId = user?.id_usuario;
+            let currentAddressId = selectedAddress?.id_usuario_endereco || selectedAddress?.id_endereco;
+
+            // 1. SE FOR VISITANTE, REALIZA O CADASTRO
+            if (!user) {
+                if (guestData.senha !== guestData.confirmar_senha) throw new Error("As senhas não coincidem.");
+                
+                const regResponse = await __ddmDatabase.entities.auth.register({
+                    ds_nome: guestData.ds_nome,
+                    ds_email: guestData.ds_email,
+                    ds_login: guestData.ds_login,
+                    nu_telefone: guestData.nu_telefone,
+                    nu_cpf_cnpj: guestData.nu_cpf_cnpj,
+                    senha: guestData.senha
+                });
+                
+                currentUserId = regResponse.id_usuario;
+
+                // Salva o endereço para o novo usuário
+                const addrResponse = await __ddmDatabase.entities.Enderecos.create({
+                    ...newAddress,
+                    id_usuario: currentUserId
+                });
+                currentAddressId = addrResponse.id_endereco;
+
+                // Faz login automático para pegar o token (opcional, mas bom para experiência)
+                try {
+                    const loginRes = await __ddmDatabase.entities.auth.login(guestData.ds_login, guestData.senha);
+                    localStorage.setItem('ddm_token', loginRes.token);
+                    localStorage.setItem('ddm_user', JSON.stringify(loginRes.user));
+                } catch (e) { console.error("Erro no login automático", e); }
+            } else if (showAddressForm) {
+                // Se o usuário logado preencheu um NOVO endereço agora
+                const addrRes = await __ddmDatabase.entities.Enderecos.create({
+                    ...newAddress,
+                    id_usuario: currentUserId
+                });
+                currentAddressId = addrRes.id_endereco;
+            }
+
+            // 2. CRIA A VENDA
             const numeroVenda = `DDM${Date.now().toString().slice(-6)}`;
             const totalComFrete = subtotal + shippingCost;
             const totalFinal = paymentMethod === 'pix' ? totalComFrete * 0.95 : totalComFrete;
 
             const vendaData = {
-                id_usuario: user.id_usuario,
+                id_usuario: currentUserId,
                 nu_nota_fiscal: numeroVenda,
                 nu_valor_total_nota: totalFinal,
                 ds_forma_pagamento: paymentMethod,
                 st_venda: 'Pendente',
                 dt_venda: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                id_usuario_endereco: selectedAddress.id_usuario_endereco // Vincula o endereço
+                id_usuario_endereco: currentAddressId
             };
 
-            // Grava no banco de dados através da sua API
             await __ddmDatabase.entities.Vendas.create(vendaData);
 
-            // Limpa os itens do carrinho no banco para este usuário
+            // 3. LIMPA CARRINHO
             for (const item of cartItems) {
                 await __ddmDatabase.entities.Carrinho.delete(item.id_carrinho);
             }
@@ -222,9 +293,11 @@ export default function Checkout() {
         onSuccess: (numero) => {
             setOrderNumber(numero);
             setOrderComplete(true);
-            // ATUALIZA O CONTADOR DO HEADER AUTOMATICAMENTE
             queryClient.invalidateQueries({ queryKey: ['cartItemsHybrid'] });
             window.dispatchEvent(new Event('cartUpdated'));
+        },
+        onError: (err) => {
+            toast.error(err.message || "Erro ao processar pedido.");
         }
     });
 
@@ -286,22 +359,68 @@ export default function Checkout() {
                     {/* COLUNA ESQUERDA (ETAPAS) */}
                     <div className="lg:col-span-2 space-y-8">
 
-                        {/* 1. ENDEREÇO */}
+                        {/* 1. IDENTIFICAÇÃO E ENDEREÇO */}
                         <div className={`transition-all duration-500 ${step === 1 ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`}>
                             <div className="flex items-center gap-4 mb-4">
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-sm ${step >= 1 ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'}`}>1</div>
-                                <h3 className="font-black text-gray-900 uppercase text-sm tracking-widest">Endereço de Entrega</h3>
+                                <h3 className="font-black text-gray-900 uppercase text-sm tracking-widest">Identificação e Entrega</h3>
                             </div>
 
                             {step === 1 && (
-                                <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
+                                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
+                                    
+                                    {/* SEÇÃO VISITANTE: DADOS PESSOAIS */}
+                                    {!user && (
+                                        <div className="mb-10 space-y-4">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <User className="w-4 h-4 text-orange-500" />
+                                                <h4 className="text-xs font-black uppercase text-gray-900 tracking-widest">Seus Dados Técnicos</h4>
+                                            </div>
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400">Nome Completo / Razão Social</Label>
+                                                    <Input value={guestData.ds_nome} onChange={e => setGuestData({...guestData, ds_nome: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400">E-mail</Label>
+                                                    <Input type="email" value={guestData.ds_email} onChange={e => setGuestData({...guestData, ds_email: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400">CPF / CNPJ</Label>
+                                                    <Input value={guestData.nu_cpf_cnpj} onChange={e => setGuestData({...guestData, nu_cpf_cnpj: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400">Telefone</Label>
+                                                    <Input value={guestData.nu_telefone} onChange={e => setGuestData({...guestData, nu_telefone: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400">Defina um Login</Label>
+                                                    <Input value={guestData.ds_login} onChange={e => setGuestData({...guestData, ds_login: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] font-black uppercase text-gray-400">Senha</Label>
+                                                        <Input type="password" value={guestData.senha} onChange={e => setGuestData({...guestData, senha: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] font-black uppercase text-gray-400">Confirmar</Label>
+                                                        <Input type="password" value={guestData.confirmar_senha} onChange={e => setGuestData({...guestData, confirmar_senha: e.target.value})} className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="h-px bg-gray-100 my-8" />
+                                        </div>
+                                    )}
 
-                                    {/* MODO ADICIONAR ENDEREÇO (OU SE LISTA VAZIA) */}
-                                    {(showAddressForm || addresses.length === 0) ? (
+                                    {/* MODO ADICIONAR ENDEREÇO (OU SE VISITANTE) */}
+                                    {(showAddressForm || !user) ? (
                                         <div className="space-y-4 animate-in fade-in zoom-in-95">
                                             <div className="flex items-center justify-between mb-4">
-                                                <h4 className="text-xs font-black uppercase text-gray-900">Novo Endereço</h4>
-                                                {addresses.length > 0 && (
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="w-4 h-4 text-orange-500" />
+                                                    <h4 className="text-xs font-black uppercase text-gray-900 tracking-widest">Endereço de Entrega</h4>
+                                                </div>
+                                                {user && addresses.length > 0 && (
                                                     <Button variant="ghost" size="sm" onClick={() => setShowAddressForm(false)}>
                                                         <X className="w-4 h-4 mr-2" /> Cancelar
                                                     </Button>
@@ -309,131 +428,139 @@ export default function Checkout() {
                                             </div>
 
                                             <div className="grid grid-cols-3 gap-4">
-                                                <div className="space-y-2 col-span-1">
-                                                    <Label className="text-[10px] font-bold uppercase text-gray-500">CEP</Label>
-                                                    <Input
-                                                        value={newAddress.ds_cep}
-                                                        onChange={(e) => setNewAddress({...newAddress, ds_cep: e.target.value})}
-                                                        placeholder="00000-000"
-                                                        className="h-11 bg-gray-50 border-gray-200"
-                                                    />
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">CEP</Label>
+                                                    <div className="relative">
+                                                        <Input 
+                                                            value={newAddress.nu_cep} 
+                                                            onBlur={handleCepBlur} 
+                                                            onChange={e => setNewAddress({...newAddress, nu_cep: e.target.value})} 
+                                                            className="h-12 rounded-xl bg-gray-50 border-gray-200 font-bold pr-10" 
+                                                            placeholder="00000000" 
+                                                        />
+                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                            {searchingCep ? <Loader2 className="w-4 h-4 animate-spin text-orange-500" /> : <Search className="w-4 h-4 text-gray-300" />}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
-                                                {/* SELETOR DE ESTADO (UF) */}
-                                                <div className="space-y-2 col-span-1">
-                                                    <Label className="text-[10px] font-bold uppercase text-gray-500">Estado</Label>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Estado (UF)</Label>
                                                     <select
                                                         value={newAddress.id_uf}
-                                                        onChange={(e) => setNewAddress({...newAddress, id_uf: e.target.value, id_municipio: ''})} // Reseta cidade ao mudar UF
-                                                        className="w-full h-11 px-3 rounded-md border border-gray-200 bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                        onChange={(e) => setNewAddress({...newAddress, id_uf: e.target.value, id_municipio: ''})}
+                                                        className="w-full h-12 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
                                                     >
-                                                        <option value="">Selecione...</option>
+                                                        <option value="">UF</option>
                                                         {ufs.map(uf => (
                                                             <option key={uf.id_uf} value={uf.id_uf}>{uf.sg_uf}</option>
                                                         ))}
                                                     </select>
                                                 </div>
 
-                                                {/* SELETOR DE CIDADE */}
-                                                <div className="space-y-2 col-span-1">
-                                                    <Label className="text-[10px] font-bold uppercase text-gray-500">Cidade</Label>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Cidade</Label>
                                                     <div className="relative">
                                                         <select 
                                                             disabled={!newAddress.id_uf || municipios.length === 0}
                                                             value={newAddress.id_municipio}
                                                             onChange={e => setNewAddress({...newAddress, id_municipio: e.target.value})}
+                                                            className="w-full h-12 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                                                         >
-                                                            <option value="">{loadingMunicipios ? 'Carregando...' : 'Selecione a Cidade'}</option>
+                                                            <option value="">{loadingMunicipios ? 'Buscando...' : 'Cidade'}</option>
                                                             {municipios.map(m => (
                                                                 <option key={m.id_municipio} value={m.id_municipio}>{m.ds_cidade}</option>
                                                             ))}
                                                         </select>
                                                         {loadingMunicipios && (
-                                                            <Loader2 className="absolute right-3 top-3 w-4 h-4 animate-spin text-gray-400" />
+                                                            <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
                                                         )}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-[2fr_1fr] gap-4">
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] font-bold uppercase text-gray-500">Endereço (Rua/Av)</Label>
-                                                    <Input
-                                                        value={newAddress.ds_logradouro}
-                                                        onChange={(e) => setNewAddress({...newAddress, ds_logradouro: e.target.value})}
-                                                        placeholder="Ex: Av. Paulista"
-                                                        className="h-11 bg-gray-50 border-gray-200"
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label className="text-[10px] font-bold uppercase text-gray-500">Número</Label>
-                                                    <Input
-                                                        value={newAddress.nu_numero}
-                                                        onChange={(e) => setNewAddress({...newAddress, nu_numero: e.target.value})}
-                                                        placeholder="123"
-                                                        className="h-11 bg-gray-50 border-gray-200"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] font-bold uppercase text-gray-500">Bairro</Label>
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Rua e Número</Label>
                                                 <Input
-                                                    value={newAddress.ds_bairro}
-                                                    onChange={(e) => setNewAddress({...newAddress, ds_bairro: e.target.value})}
-                                                    placeholder="Ex: Centro"
-                                                    className="h-11 bg-gray-50 border-gray-200"
+                                                    value={newAddress.ds_endereco}
+                                                    onChange={(e) => setNewAddress({...newAddress, ds_endereco: e.target.value})}
+                                                    placeholder="Logradouro completo"
+                                                    className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold"
                                                 />
                                             </div>
 
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Bairro</Label>
+                                                    <Input
+                                                        value={newAddress.ds_bairro}
+                                                        onChange={(e) => setNewAddress({...newAddress, ds_bairro: e.target.value})}
+                                                        className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Complemento</Label>
+                                                    <Input
+                                                        value={newAddress.ds_referencia}
+                                                        onChange={(e) => setNewAddress({...newAddress, ds_referencia: e.target.value})}
+                                                        placeholder="Opcional"
+                                                        className="h-12 bg-gray-50 border-gray-200 rounded-xl font-bold"
+                                                    />
+                                                </div>
+                                            </div>
+
                                             <Button
-                                                onClick={handleSaveAddress}
-                                                disabled={createAddressMutation.isPending}
-                                                className="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white font-bold h-12 rounded-xl uppercase tracking-wider text-xs"
+                                                onClick={() => setStep(2)}
+                                                disabled={!newAddress.nu_cep || !newAddress.ds_endereco || !newAddress.id_municipio || (!user && !guestData.ds_email)}
+                                                className="w-full mt-6 bg-gray-900 hover:bg-orange-600 text-white font-black h-14 rounded-2xl uppercase tracking-widest text-[11px] transition-all shadow-lg"
                                             >
-                                                {createAddressMutation.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "Salvar Endereço"}
+                                                Continuar para Frete
                                             </Button>
                                         </div>
                                     ) : (
-                                        // LISTA DE ENDEREÇOS EXISTENTES
+                                        // LISTA DE ENDEREÇOS PARA USUÁRIO LOGADO
                                         <>
-                                            <RadioGroup value={selectedAddress?.id_usuario_endereco} onValueChange={(val) => setSelectedAddress(addresses.find(a => a.id_usuario_endereco == val))}>
+                                            <div className="flex items-center justify-between mb-6">
+                                                <h4 className="text-xs font-black uppercase text-gray-900 tracking-widest">Escolha o Endereço</h4>
+                                                <Button variant="outline" size="sm" onClick={() => setShowAddressForm(true)} className="rounded-xl border-gray-200 font-bold uppercase text-[9px]">
+                                                    <Plus className="w-3 h-3 mr-2" /> Novo Endereço
+                                                </Button>
+                                            </div>
+
+                                            <RadioGroup 
+                                                value={String(selectedAddress?.id_usuario_endereco || selectedAddress?.id_endereco)} 
+                                                onValueChange={(val) => {
+                                                    const found = addresses.find(a => String(a.id_usuario_endereco || a.id_endereco) === val);
+                                                    setSelectedAddress(found);
+                                                }}
+                                            >
                                                 <div className="grid md:grid-cols-2 gap-4">
                                                     {addresses.map(addr => (
-                                                        <div key={addr.id_usuario_endereco} className="relative">
-                                                            <RadioGroupItem value={addr.id_usuario_endereco} id={`addr-${addr.id_usuario_endereco}`} className="peer sr-only" />
+                                                        <div key={addr.id_usuario_endereco || addr.id_endereco} className="relative">
+                                                            <RadioGroupItem value={String(addr.id_usuario_endereco || addr.id_endereco)} id={`addr-${addr.id_usuario_endereco || addr.id_endereco}`} className="peer sr-only" />
                                                             <Label
-                                                                htmlFor={`addr-${addr.id_usuario_endereco}`}
-                                                                className="flex flex-col p-5 rounded-2xl border-2 border-gray-100 bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 cursor-pointer transition-all hover:border-orange-200 h-full"
+                                                                htmlFor={`addr-${addr.id_usuario_endereco || addr.id_endereco}`}
+                                                                className="flex flex-col p-5 rounded-3xl border-2 border-gray-100 bg-gray-50 peer-checked:border-orange-500 peer-checked:bg-orange-50 cursor-pointer transition-all hover:border-orange-200 h-full shadow-sm hover:shadow-md"
                                                             >
-                                                                <div className="flex justify-between items-start mb-2">
-                                                                    <MapPin className="w-5 h-5 text-gray-400 peer-checked:text-orange-500" />
-                                                                    {selectedAddress?.id_usuario_endereco === addr.id_usuario_endereco && <Check className="w-5 h-5 text-orange-600" />}
+                                                                <div className="flex justify-between items-start mb-3">
+                                                                    <div className={`p-2 rounded-xl ${String(selectedAddress?.id_usuario_endereco || selectedAddress?.id_endereco) === String(addr.id_usuario_endereco || addr.id_endereco) ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+                                                                        <MapPin className="w-4 h-4" />
+                                                                    </div>
+                                                                    {String(selectedAddress?.id_usuario_endereco || selectedAddress?.id_endereco) === String(addr.id_usuario_endereco || addr.id_endereco) && <Check className="w-5 h-5 text-orange-600" />}
                                                                 </div>
-                                                                <p className="font-black text-gray-900 text-xs uppercase mb-1">{addr.ds_endereco}</p>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase">{addr.ds_bairro} • CEP: {addr.nu_cep}</p>
-                                                                <p className="text-[10px] font-bold text-gray-400 uppercase">{addr.ds_cidade} / {addr.ds_uf}</p>
+                                                                <p className="font-black text-gray-900 text-xs uppercase mb-1 leading-tight">{addr.ds_endereco}</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{addr.ds_bairro} • CEP: {addr.nu_cep}</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{addr.ds_cidade} / {addr.sg_uf || addr.ds_uf}</p>
                                                             </Label>
                                                         </div>
                                                     ))}
-
-                                                    {/* Botão de Adicionar Novo na Grid */}
-                                                    <button
-                                                        onClick={() => setShowAddressForm(true)}
-                                                        className="flex flex-col items-center justify-center p-5 rounded-2xl border-2 border-dashed border-gray-200 bg-white hover:border-orange-300 hover:bg-orange-50 transition-all cursor-pointer h-full min-h-[120px]"
-                                                    >
-                                                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-                                                            <Plus className="w-5 h-5 text-gray-500" />
-                                                        </div>
-                                                        <span className="text-[10px] font-bold uppercase text-gray-500">Novo Endereço</span>
-                                                    </button>
                                                 </div>
                                             </RadioGroup>
 
                                             <Button
                                                 onClick={() => setStep(2)}
                                                 disabled={!selectedAddress}
-                                                className="w-full mt-6 bg-gray-900 hover:bg-gray-800 text-white font-black h-12 rounded-xl uppercase tracking-widest text-[10px]"
+                                                className="w-full mt-8 bg-gray-900 hover:bg-orange-600 text-white font-black h-14 rounded-2xl uppercase tracking-widest text-[11px] shadow-lg transition-all"
                                             >
                                                 Continuar para Frete
                                             </Button>
@@ -451,25 +578,39 @@ export default function Checkout() {
                             </div>
 
                             {step === 2 && (
-                                <div className="bg-white p-6 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
-                                    <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-3">
-                                        <MapPin className="w-4 h-4 text-orange-500" />
-                                        <div className="text-xs">
-                                            <span className="text-gray-400 font-bold uppercase mr-2">Entregar em:</span>
-                                            <span className="font-black text-gray-900 uppercase">{selectedAddress?.ds_endereco} - {selectedAddress?.ds_cidade}/{selectedAddress?.ds_uf}</span>
+                                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
+                                    <div className="mb-8 p-5 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-4">
+                                        <div className="bg-orange-100 p-2.5 rounded-xl">
+                                            <MapPin className="w-5 h-5 text-orange-600" />
+                                        </div>
+                                        <div className="text-[11px]">
+                                            <p className="text-gray-400 font-bold uppercase tracking-widest">Entregar em:</p>
+                                            <p className="font-black text-gray-900 uppercase">
+                                                {showAddressForm ? newAddress.ds_endereco : selectedAddress?.ds_endereco} • 
+                                                {(showAddressForm ? ufs.find(u => String(u.id_uf) === String(newAddress.id_uf))?.sg_uf : selectedAddress?.sg_uf) || ''}
+                                            </p>
                                         </div>
                                     </div>
 
-                                    <ShippingCalculator
-                                        id_produto={cartItems[0]?.id_produto}
-                                        onSelectShipping={setSelectedShipping}
-                                        selectedShipping={selectedShipping}
-                                        compact
-                                    />
+                                    {/* Opção de Frete Simplificada */}
+                                    <div className="space-y-4">
+                                        <div className="p-6 rounded-3xl border-2 border-orange-500 bg-orange-50 flex justify-between items-center shadow-sm">
+                                            <div className="flex items-center gap-4">
+                                                <div className="bg-orange-500 p-3 rounded-2xl text-white">
+                                                    <Truck className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-gray-900 uppercase text-xs tracking-widest">Frete Grátis</p>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Entrega padrão industrial • 5-10 dias úteis</p>
+                                                </div>
+                                            </div>
+                                            <span className="font-black text-green-600 uppercase text-xs">Grátis</span>
+                                        </div>
+                                    </div>
 
-                                    <div className="flex gap-4 mt-6">
-                                        <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-12 rounded-xl font-bold uppercase text-[10px]">Voltar</Button>
-                                        <Button onClick={() => setStep(3)} disabled={!selectedShipping} className="flex-[2] bg-gray-900 text-white font-black h-12 rounded-xl uppercase tracking-widest text-[10px]">Ir para Pagamento</Button>
+                                    <div className="flex gap-4 mt-10">
+                                        <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-14 rounded-2xl font-black uppercase text-[10px] tracking-widest border-gray-200">Voltar</Button>
+                                        <Button onClick={() => setStep(3)} className="flex-[2] bg-gray-900 hover:bg-orange-600 text-white font-black h-14 rounded-2xl uppercase tracking-widest text-[11px] shadow-lg transition-all">Ir para Pagamento</Button>
                                     </div>
                                 </div>
                             )}
@@ -486,34 +627,36 @@ export default function Checkout() {
                                 <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
 
                                     {/* SELETOR DE MÉTODO */}
-                                    <div className="grid grid-cols-2 gap-4 mb-8">
+                                    <div className="grid grid-cols-2 gap-4 mb-10">
                                         <div
                                             onClick={() => setPaymentMethod('pix')}
-                                            className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-3 ${paymentMethod === 'pix' ? 'border-green-500 bg-green-50 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                            className={`p-8 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-4 ${paymentMethod === 'pix' ? 'border-green-500 bg-green-50 shadow-md scale-[1.02]' : 'border-gray-100 hover:bg-gray-50'}`}
                                         >
-                                            <QrCode className={`w-8 h-8 ${paymentMethod === 'pix' ? 'text-green-600' : 'text-gray-300'}`} />
+                                            <div className={`p-4 rounded-2xl ${paymentMethod === 'pix' ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                <QrCode className="w-8 h-8" />
+                                            </div>
                                             <div className="text-center">
-                                                <p className="text-xs font-black uppercase text-gray-900">PIX</p>
-                                                <p className="text-[10px] font-bold text-green-600 uppercase tracking-tight">5% de Desconto</p>
+                                                <p className="text-xs font-black uppercase text-gray-900 tracking-widest">PIX</p>
+                                                <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mt-1">5% DESCONTO</p>
                                             </div>
                                         </div>
                                         <div
                                             onClick={() => setPaymentMethod('cartao')}
-                                            className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center gap-3 ${paymentMethod === 'cartao' ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-100 hover:bg-gray-50'}`}
+                                            className={`p-8 rounded-3xl border-2 cursor-pointer transition-all flex flex-col items-center gap-4 ${paymentMethod === 'cartao' ? 'border-blue-500 bg-blue-50 shadow-md scale-[1.02]' : 'border-gray-100 hover:bg-gray-50'}`}
                                         >
-                                            <CreditCard className={`w-8 h-8 ${paymentMethod === 'cartao' ? 'text-blue-600' : 'text-gray-300'}`} />
+                                            <div className={`p-4 rounded-2xl ${paymentMethod === 'cartao' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                <CreditCard className="w-8 h-8" />
+                                            </div>
                                             <div className="text-center">
-                                                <p className="text-xs font-black uppercase text-gray-900">Cartão</p>
-                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Até 12x</p>
+                                                <p className="text-xs font-black uppercase text-gray-900 tracking-widest">CARTÃO</p>
+                                                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">ATÉ 12X</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* FORMULÁRIO DO CARTÃO (SÓ APARECE SELECIONADO) */}
+                                    {/* FORMULÁRIO DO CARTÃO */}
                                     {paymentMethod === 'cartao' && (
-                                        <div className="animate-in fade-in slide-in-from-top-4 mb-8">
-
-                                            {/* CARTÃO VISUAL 3D */}
+                                        <div className="animate-in fade-in slide-in-from-top-4 mb-10">
                                             <CreditCardVisual
                                                 number={cardData.number}
                                                 name={cardData.name}
@@ -539,7 +682,7 @@ export default function Checkout() {
                                                     <Input
                                                         value={cardData.name}
                                                         onChange={(e) => setCardData({...cardData, name: e.target.value.toUpperCase()})}
-                                                        placeholder="COMO ESTÁ NO CARTÃO"
+                                                        placeholder="NOME COMO NO CARTÃO"
                                                         onFocus={() => setIsCardFlipped(false)}
                                                         className="h-12 rounded-xl bg-gray-50 border-gray-200 font-bold uppercase text-xs"
                                                     />
@@ -569,19 +712,121 @@ export default function Checkout() {
                                                         />
                                                     </div>
                                                 </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Parcelamento</Label>
+                                                    <select
+                                                        value={cardData.installments}
+                                                        onChange={(e) => setCardData({...cardData, installments: e.target.value})}
+                                                        className="w-full h-12 px-3 rounded-xl border border-gray-200 bg-gray-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    >
+                                                        {installmentOptions.map(opt => (
+                                                            <option key={opt.count} value={opt.count}>{opt.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
 
                                     <div className="flex gap-4">
-                                        <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-14 rounded-xl font-bold uppercase text-[10px]">Voltar</Button>
+                                        <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-16 rounded-2xl font-black uppercase text-[10px] tracking-widest">Voltar</Button>
                                         <Button
-                                            onClick={() => createOrderMutation.mutate()}
-                                            disabled={createOrderMutation.isPending || (paymentMethod === 'cartao' && (!cardData.number || !cardData.cvv))}
-                                            className="flex-[2] h-14 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-green-600/20"
+                                            onClick={() => setStep(4)}
+                                            disabled={paymentMethod === 'cartao' && (!cardData.number || !cardData.cvv)}
+                                            className="flex-[2] h-16 bg-gray-900 hover:bg-orange-600 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-xl transition-all hover:scale-105"
                                         >
-                                            {createOrderMutation.isPending ? <Loader2 className="animate-spin" /> : "Finalizar Pedido Agora"}
+                                            Revisar Pedido <ArrowLeft className="w-4 h-4 ml-2 rotate-180" />
                                         </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. REVISÃO FINAL */}
+                        <div className={`transition-all duration-500 ${step === 4 ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`}>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-sm ${step >= 4 ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-400'}`}>4</div>
+                                <h3 className="font-black text-gray-900 uppercase text-sm tracking-widest">Confirmação Final</h3>
+                            </div>
+
+                            {step === 4 && (
+                                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-gray-200/50 border border-gray-100 animate-in slide-in-from-left-4">
+                                    <div className="space-y-8">
+                                        <div className="grid md:grid-cols-2 gap-8">
+                                            {/* Coluna 1: Entrega */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2 text-orange-600">
+                                                    <MapPin className="w-4 h-4" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Local de Entrega</span>
+                                                </div>
+                                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                                                    <p className="font-black text-gray-900 uppercase text-xs mb-1">
+                                                        {showAddressForm ? newAddress.ds_endereco : selectedAddress?.ds_endereco}
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase leading-tight">
+                                                        {showAddressForm 
+                                                            ? `${newAddress.ds_bairro} • ${ufs.find(u => String(u.id_uf) === String(newAddress.id_uf))?.sg_uf || ''} • CEP: ${newAddress.nu_cep}` 
+                                                            : `${selectedAddress?.ds_bairro} • ${selectedAddress?.sg_uf || selectedAddress?.ds_uf || ''} • CEP: ${selectedAddress?.nu_cep}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Coluna 2: Pagamento */}
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-2 text-orange-600">
+                                                    <CreditCard className="w-4 h-4" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Forma de Pagamento</span>
+                                                </div>
+                                                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                                                    <p className="font-black text-gray-900 uppercase text-xs mb-1">
+                                                        {paymentMethod === 'pix' ? 'PIX (Pagamento Instantâneo)' : 'Cartão de Crédito'}
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase leading-tight">
+                                                        {paymentMethod === 'pix' 
+                                                            ? 'Desconto de 5% aplicado no valor total' 
+                                                            : `Parcelado em ${cardData.installments}x de ${formatCurrency(total / cardData.installments)} sem juros`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Tabela de Itens Simplificada */}
+                                        <div className="border border-gray-100 rounded-3xl overflow-hidden">
+                                            <div className="bg-gray-50 px-6 py-3 border-b border-gray-100">
+                                                <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Peças Industriais Requisitadas</span>
+                                            </div>
+                                            <div className="divide-y divide-gray-50">
+                                                {cartItems.map(item => (
+                                                    <div key={item.id_carrinho} className="px-6 py-4 flex justify-between items-center bg-white">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-black text-gray-900 uppercase text-[11px]">{item.ds_nome}</span>
+                                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Qtd: {item.nu_quantidade} unidades</span>
+                                                        </div>
+                                                        <span className="font-black text-gray-900 text-xs">{formatCurrency(item.nu_preco_unitario * item.nu_quantidade)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 flex items-center gap-4">
+                                            <div className="bg-white p-3 rounded-2xl shadow-sm">
+                                                <ShieldCheck className="w-6 h-6 text-orange-600" />
+                                            </div>
+                                            <p className="text-[10px] font-bold text-orange-800 uppercase leading-relaxed tracking-tight">
+                                                Ao confirmar, você declara estar de acordo com os dados técnicos e termos de faturamento da DDM Indústria.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex gap-4 pt-4">
+                                            <Button variant="outline" onClick={() => setStep(3)} className="flex-1 h-16 rounded-2xl font-black uppercase text-[10px] tracking-widest border-gray-200">Voltar</Button>
+                                            <Button
+                                                onClick={() => createOrderMutation.mutate()}
+                                                disabled={createOrderMutation.isPending}
+                                                className="flex-[2] h-16 bg-green-600 hover:bg-green-700 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-xl shadow-green-600/20 transition-all hover:scale-105"
+                                            >
+                                                {createOrderMutation.isPending ? <Loader2 className="animate-spin mr-2" /> : <Check className="w-5 h-5 mr-3" />} Confirmar e Finalizar Compra
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -591,62 +836,139 @@ export default function Checkout() {
                     {/* COLUNA DIREITA (RESUMO FIXO) */}
                     <div>
                         <div className="sticky top-32 space-y-6">
-                            <Card className="rounded-[2rem] border-none shadow-2xl shadow-gray-200/50 bg-white overflow-hidden">
-                                <CardHeader className="bg-gray-950 text-white p-6 flex flex-row items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <ShoppingBag className="w-5 h-5 text-orange-500" />
-                                        <CardTitle className="text-xs font-black uppercase tracking-[0.2em]">Resumo</CardTitle>
+                            <Card className="rounded-[2.5rem] border-none shadow-2xl shadow-gray-200/50 bg-white overflow-hidden">
+                                <CardHeader className="bg-gray-950 text-white p-8 flex flex-row items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-orange-500 p-2 rounded-lg">
+                                            <ShoppingBag className="w-4 h-4 text-white" />
+                                        </div>
+                                        <CardTitle className="text-sm font-black uppercase tracking-wider text-white">Resumo do Pedido</CardTitle>
                                     </div>
-                                    <Badge className="bg-white/10 text-white text-[9px] font-bold">{cartItems.length} Itens</Badge>
+                                    <Badge className="bg-white/10 text-white text-[10px] font-black border-none px-3 py-1">{cartItems.length} Peças</Badge>
                                 </CardHeader>
-                                <CardContent className="p-6">
-                                    <div className="space-y-4 max-h-60 overflow-y-auto pr-2 mb-6 custom-scrollbar">
+                                <CardContent className="p-8">
+                                    {/* ITENS */}
+                                    <div className="space-y-4 max-h-60 overflow-y-auto pr-2 mb-8 custom-scrollbar">
                                         {cartItems.map(item => (
-                                            <div key={item.id_carrinho} className="flex justify-between items-start text-xs border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                                                <div>
-                                                    <p className="font-bold text-gray-900 uppercase truncate max-w-[150px]">{item.ds_nome}</p>
-                                                    <p className="text-[10px] text-gray-400 font-medium">Qtd: {item.nu_quantidade}</p>
+                                            <div key={item.id_carrinho} className="flex justify-between items-start text-xs border-b border-gray-50 pb-4 last:border-0 last:pb-0">
+                                                <div className="flex-1 pr-4">
+                                                    <p className="font-black text-gray-900 uppercase truncate leading-tight mb-1">{item.ds_nome}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Qtd: {item.nu_quantidade}</p>
                                                 </div>
-                                                <span className="font-bold text-gray-900">{formatCurrency(item.nu_preco_unitario * item.nu_quantidade)}</span>
+                                                <span className="font-black text-gray-900 text-xs">{formatCurrency(item.nu_preco_unitario * item.nu_quantidade)}</span>
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                                        <div className="flex justify-between text-[11px] font-bold uppercase text-gray-500">
+                                    {/* DADOS DO PEDIDO (DINÂMICO) */}
+                                    <div className="space-y-6 mb-8">
+                                        {/* ENDEREÇO SELECIONADO */}
+                                        {(selectedAddress || (step > 1 && showAddressForm)) && (
+                                            <div className="space-y-2">
+                                                <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-2">
+                                                    <MapPin className="w-3 h-3" /> Entrega em
+                                                </p>
+                                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                                    <p className="text-[10px] font-bold text-gray-900 uppercase leading-tight">
+                                                        {showAddressForm ? newAddress.ds_endereco : selectedAddress?.ds_endereco}
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-500 uppercase mt-1">
+                                                        {showAddressForm ? `${newAddress.ds_bairro} • ${ufs.find(u => String(u.id_uf) === String(newAddress.id_uf))?.sg_uf || ''}` : `${selectedAddress?.ds_bairro} • ${selectedAddress?.sg_uf || selectedAddress?.ds_uf || ''}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* MÉTODO DE PAGAMENTO E PARCELAS */}
+                                        {step === 3 && (
+                                            <div className="space-y-2">
+                                                <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest flex items-center gap-2">
+                                                    <CreditCard className="w-3 h-3" /> Pagamento
+                                                </p>
+                                                <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                                    <p className="text-[10px] font-bold text-gray-900 uppercase">
+                                                        {paymentMethod === 'pix' ? 'PIX (À Vista)' : 'Cartão de Crédito'}
+                                                    </p>
+                                                    {paymentMethod === 'cartao' && (
+                                                        <p className="text-[9px] text-orange-600 font-black uppercase mt-1">
+                                                            {cardData.installments}x de {formatCurrency(total / cardData.installments)}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* TOTAIS */}
+                                    <div className="bg-gray-900 rounded-[1.5rem] p-6 space-y-4 text-white">
+                                        <div className="flex justify-between text-[11px] font-bold uppercase text-gray-400 tracking-widest">
                                             <span>Subtotal</span>
-                                            <span>{formatCurrency(subtotal)}</span>
+                                            <span className="text-white">{formatCurrency(subtotal)}</span>
                                         </div>
-                                        <div className="flex justify-between text-[11px] font-bold uppercase text-gray-500">
-                                            <span>Frete</span>
-                                            <span className={selectedShipping ? "text-gray-900" : "text-orange-500"}>
+                                        <div className="flex justify-between text-[11px] font-bold uppercase text-gray-400 tracking-widest">
+                                            <span>Frete Logístico</span>
+                                            <span className={selectedShipping ? "text-white" : "text-orange-500 font-black animate-pulse"}>
                                                 {selectedShipping ? formatCurrency(shippingCost) : "A calcular"}
                                             </span>
                                         </div>
                                         {paymentMethod === 'pix' && (
-                                            <div className="flex justify-between text-[11px] font-bold uppercase text-green-600">
-                                                <span>Desconto PIX (5%)</span>
+                                            <div className="flex justify-between text-[11px] font-black uppercase text-green-400 tracking-widest">
+                                                <span>Incentivo PIX (-5%)</span>
                                                 <span>- {formatCurrency(total * 0.05)}</span>
                                             </div>
                                         )}
-                                        <div className="pt-3 mt-3 border-t border-gray-200 flex justify-between items-end">
-                                            <span className="font-black text-xs uppercase text-gray-900">Total</span>
-                                            <span className="text-2xl font-black text-orange-600 tracking-tighter leading-none">
-                                                {formatCurrency(paymentMethod === 'pix' ? total * 0.95 : total)}
+                                        <div className="pt-5 mt-5 border-t border-white/10 flex justify-between items-end">
+                                            <div className="flex flex-col">
+                                                <span className="font-black text-[10px] uppercase text-gray-400 tracking-[0.2em] mb-1">Total Final</span>
+                                                <span className="text-white font-black text-[8px] uppercase opacity-40">
+                                                    {paymentMethod === 'cartao' ? `Em ${cardData.installments}x no cartão` : 'Pagamento à vista'}
+                                                </span>
+                                            </div>
+                                            <span className="text-3xl font-black text-orange-500 tracking-tighter leading-none italic">
+                                                {formatCurrency(finalTotal)}
                                             </span>
                                         </div>
                                     </div>
 
-                                    <div className="mt-6 flex items-center justify-center gap-2 opacity-50">
-                                        <Lock className="w-3 h-3 text-gray-400" />
-                                        <span className="text-[9px] font-bold uppercase text-gray-400 tracking-widest">Compra 100% Segura</span>
+                                    <div className="mt-8 flex items-center justify-center gap-3 opacity-30">
+                                        <Lock className="w-3.5 h-3.5 text-gray-900" />
+                                        <span className="text-[9px] font-black uppercase text-gray-900 tracking-[0.2em]">Criptografia de Ponta Ativa</span>
                                     </div>
                                 </CardContent>
                             </Card>
+                            
+                            {/* Card de Aviso */}
+                            <div className="bg-orange-500 rounded-3xl p-8 text-white shadow-xl shadow-orange-500/20 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 -rotate-12 group-hover:rotate-0 transition-transform">
+                                    <ShieldCheck className="w-16 h-16" />
+                                </div>
+                                <h4 className="font-black uppercase italic text-sm mb-2 relative z-10">Garantia DDM</h4>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-100 leading-relaxed relative z-10">Sua compra é protegida pelo nosso protocolo de segurança industrial e logística própria.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     );
+}
+
+function ShieldCheck(props) {
+    return (
+        <svg
+            {...props}
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+            <path d="m9 12 2 2 4-4" />
+        </svg>
+    )
 }

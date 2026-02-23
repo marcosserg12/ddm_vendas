@@ -21,7 +21,13 @@ import { FlaskConical, Layers } from "lucide-react";
 
 // Pequeno Badge local
 function Badge({ children, className }) {
-  return <span className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${className}`}>{children}</span>;
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-gray-100 text-gray-800 backdrop-blur-sm ${className}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 const categories = [
@@ -82,16 +88,16 @@ export default function Home() {
       <HeroSlider />
 
       {/* Marcas Compatíveis */}
-      <section className="bg-white border-b border-gray-100 py-8 md:py-10">
+      <section className="bg-white border-b border-gray-100 py-8 md:py-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <h3 className="text-center text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-6 md:mb-8">
             Compatibilidade Industrial
           </h3>
-          <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-4 md:gap-x-10 opacity-60 hover:opacity-100 transition-opacity duration-500">
+          <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-4 md:gap-x-10 opacity-60 hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-gray-50 to-white">
             {brands.map((brand) => (
               <span
                 key={brand}
-                className="text-gray-900 font-black text-sm md:text-xl uppercase tracking-tighter cursor-default hover:text-orange-600 transition-colors"
+                className="text-gray-900 font-black text-sm md:text-xl uppercase tracking-tighter cursor-default hover:text-orange-600 transition-colors transform hover:scale-105"
               >
                 {brand}
               </span>
@@ -101,7 +107,7 @@ export default function Home() {
       </section>
 
       {/* SEÇÃO 1: LINHAS DE PRODUÇÃO */}
-      <section className="py-12 md:py-24 bg-gray-50">
+      <section className="py-12 md:py-24 bg-gray-50 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-10 md:mb-16 pb-6 md:pb-8 border-b border-gray-200">
             <div className="relative pl-5 md:pl-6">
@@ -112,6 +118,7 @@ export default function Home() {
                   Produção
                 </span>
               </h2>
+              <div className="w-16 h-1 bg-orange-500 rounded-full mt-4"></div>
             </div>
             <div className="flex flex-col items-start md:items-end gap-4 md:gap-6 w-full md:max-w-md">
               <p className="text-gray-500 font-medium text-xs md:text-sm md:text-right leading-relaxed">
@@ -127,7 +134,7 @@ export default function Home() {
 
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
             {categories.map((cat) => (
-              <Link key={cat.id} to={`/catalogo?id_categoria=${cat.id}`} className="group h-full">
+              <Link key={cat.id} to={`/catalogo?id_categoria=${cat.id}`} className="group h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <Card className="h-full border-none shadow-sm hover:shadow-xl transition-all duration-500 bg-white rounded-2xl md:rounded-[2rem] overflow-hidden relative isolate">
                   <div className="relative h-32 md:h-64 overflow-hidden">
                     <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
@@ -152,8 +159,11 @@ export default function Home() {
       </section>
 
       {/* SEÇÃO 2: PRODUTOS EM DESTAQUE (CARD NOVO) */}
-      <section className="py-12 md:py-24 bg-[#F3F4F6] relative overflow-hidden">
+      <section className="py-12 md:py-24 bg-[#F3F4F6] relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="max-w-7xl mx-auto px-4 md:px-6 relative z-10">
+          {/* decorações suaves */}
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-orange-200 opacity-20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-10 -right-10 w-60 h-60 bg-orange-300 opacity-20 rounded-full blur-3xl pointer-events-none" />
 
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-12 gap-4 md:gap-6 border-b border-gray-300 pb-6 md:pb-8">
             <div className="relative pl-5 md:pl-6">
@@ -161,6 +171,7 @@ export default function Home() {
               <h2 className="text-2xl md:text-4xl font-black text-gray-900 uppercase italic tracking-tighter leading-none">
                 Peças Mais <br /> <span className="text-orange-500">Procuradas</span>
               </h2>
+              <div className="w-14 h-1 bg-orange-500 rounded-full mt-3"></div>
             </div>
             <Link to="/catalogo" className="text-gray-500 hover:text-orange-600 text-[10px] md:text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors self-end md:self-auto">
               Ver tudo <ArrowRight className="w-3 h-3" />
@@ -177,9 +188,9 @@ export default function Home() {
                 <Link
                   key={product.id_produto}
                   to={`/produto?id=${product.id_produto}`}
-                  className="group block h-full"
+                  className="group block h-full animate-in fade-in slide-in-from-bottom-4 duration-500"
                 >
-                  <div className="bg-white rounded-[1.5rem] border border-gray-100 hover:border-orange-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden h-full flex flex-col">
+                  <div className="bg-white rounded-[1.5rem] border border-gray-100 hover:border-orange-200 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:scale-[1.02] transition-all duration-300 overflow-hidden h-full flex flex-col">
 
                     {/* Imagem Clean */}
                     <div className="relative aspect-square p-6 bg-white flex items-center justify-center overflow-hidden">
@@ -228,7 +239,7 @@ export default function Home() {
       </section>
 
       {/* SEÇÃO 3: ENGENHARIA */}
-      <section className="relative py-16 md:py-28 bg-gray-950 overflow-hidden">
+      <section className="relative py-16 md:py-28 bg-gray-950 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-gray-800 via-gray-950 to-gray-950 opacity-40 pointer-events-none" />
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-soft-light pointer-events-none"></div>
 
@@ -242,6 +253,7 @@ export default function Home() {
               <h2 className="text-3xl md:text-6xl font-black text-white uppercase italic tracking-tighter mb-4 md:mb-6 leading-[0.95]">
                 Engenharia <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-orange-500 to-red-500">Sob Medida</span>
               </h2>
+              <div className="w-20 h-1 bg-orange-500 rounded-full mt-4"></div>
               <p className="text-gray-400 font-medium text-sm md:text-base leading-relaxed mb-8 md:mb-10 max-w-lg">
                 Desenvolvemos moldes exclusivos a partir de desenhos técnicos (CAD) ou amostras físicas.
               </p>

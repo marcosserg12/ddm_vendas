@@ -45,7 +45,7 @@ export const __ddmDatabase = {
     entities: {
         auth: {
             login: (identifier, senha) => apiRequest('/login', 'POST', { identifier, senha }),
-            register: (data) => apiRequest('/usuarios/registrar', 'POST', data),
+            register: (data) => apiRequest('/registrar', 'POST', data),
         },
         Produtos: {
             list: () => apiRequest('/produtos'),
@@ -66,7 +66,12 @@ export const __ddmDatabase = {
         },
 
         Carrinho: {
-            list: () => apiRequest('/carrinho'),
+            list: (id_usuario, session_id) => {
+                const params = new URLSearchParams();
+                if (id_usuario) params.append('id_usuario', id_usuario);
+                if (session_id) params.append('session_id', session_id);
+                return apiRequest(`/carrinho?${params.toString()}`);
+            },
             add: (data) => apiRequest('/carrinho', 'POST', data),
             update: (id, data) => apiRequest(`/carrinho/${id}`, 'PUT', data),
             delete: (id) => apiRequest(`/carrinho/${id}`, 'DELETE'),
@@ -81,10 +86,30 @@ export const __ddmDatabase = {
         },
         // ----------------------------------------------
 
-        Marcas: { list: () => apiRequest('/marcas') },
-        Modelos: { list: () => apiRequest('/modelos') },
-        Series: { list: () => apiRequest('/series') },
-        Categoria: { list: () => apiRequest('/categoria') },
+        Marcas: {
+            list: () => apiRequest('/marcas'),
+            create: (data) => apiRequest('/marcas', 'POST', data),
+            update: (id, data) => apiRequest(`/marcas/${id}`, 'PUT', data),
+            delete: (id) => apiRequest(`/marcas/${id}`, 'DELETE'),
+        },
+        Modelos: {
+            list: () => apiRequest('/modelos'),
+            create: (data) => apiRequest('/modelos', 'POST', data),
+            update: (id, data) => apiRequest(`/modelos/${id}`, 'PUT', data),
+            delete: (id) => apiRequest(`/modelos/${id}`, 'DELETE'),
+        },
+        Series: {
+            list: () => apiRequest('/series'),
+            create: (data) => apiRequest('/series', 'POST', data),
+            update: (id, data) => apiRequest(`/series/${id}`, 'PUT', data),
+            delete: (id) => apiRequest(`/series/${id}`, 'DELETE'),
+        },
+        Categoria: {
+            list: () => apiRequest('/categoria'),
+            create: (data) => apiRequest('/categoria', 'POST', data),
+            update: (id, data) => apiRequest(`/categoria/${id}`, 'PUT', data),
+            delete: (id) => apiRequest(`/categoria/${id}`, 'DELETE'),
+        },
 
         Vendas: {
             list: () => apiRequest('/vendas'),
@@ -93,10 +118,23 @@ export const __ddmDatabase = {
         VendaProdutos: { list: () => apiRequest('/admin/order-items') },
 
         Enderecos: {
-            list: () => apiRequest('/enderecos'),
+            list: (id_usuario) => apiRequest(`/enderecos${id_usuario ? `?id_usuario=${id_usuario}` : ''}`),
             create: (data) => apiRequest('/enderecos', 'POST', data),
+            update: (id, data) => apiRequest(`/enderecos/${id}`, 'PUT', data),
+            delete: (id) => apiRequest(`/enderecos/${id}`, 'DELETE'),
+            setFavorite: (id_usuario, id_endereco) => apiRequest(`/enderecos/${id_endereco}/favorito`, 'PATCH', { id_usuario }),
         },
-        Auxiliary: { getList: (table) => apiRequest(`/${table}`).catch(() => []) },
+        Usuarios: {
+            list: () => apiRequest('/usuarios'),
+            update: (id, data) => apiRequest(`/usuarios/${id}`, 'PUT', data),
+            updatePassword: (id, data) => apiRequest(`/usuarios/${id}/senha`, 'PUT', data),
+        },
+        Auxiliary: {
+            getList: (table) => apiRequest(`/${table}`).catch(() => []),
+            create: (table, data) => apiRequest(`/${table}`, 'POST', data),
+            update: (table, id, data) => apiRequest(`/${table}/${id}`, 'PUT', data),
+            delete: (table, id) => apiRequest(`/${table}/${id}`, 'DELETE'),
+        },
 
         Embalagens: {
             list: () => apiRequest('/embalagem'),
