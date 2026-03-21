@@ -1,5 +1,5 @@
-const BASE_URL = 'http://localhost:3001/api';
-const IMG_BASE_URL = 'http://localhost:3001';
+const BASE_URL = 'https://localhost:3001/api';
+const IMG_BASE_URL = 'https://localhost:3001';
 
 const apiRequest = async (endpoint, method = 'GET', data = null, formData = null) => {
     const token = localStorage.getItem('ddm_token');
