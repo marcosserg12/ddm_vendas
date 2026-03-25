@@ -42,18 +42,18 @@ export default function Layout({ children }) {
       try {
           const serverItems = await __ddmDatabase.entities.Carrinho.list(user?.id_usuario, sessionId);
 
-          // 2. Retornamos os itens do servidor. 
+          // 2. Retornamos os itens do servidor.
           // Se o servidor retornar vazio [], o ícone mostrará 0.
           // Se encontrar pela sessão (mesmo deslogado), o ícone mostrará a quantidade correta.
           return serverItems.map(item => ({
               ...item,
               // Garante que o front entenda o ID vindo do MySQL
-              id_carrinho: item.id_item_carrinho || item.id_carrinho 
+              id_carrinho: item.id_item_carrinho || item.id_carrinho
           }));
 
       } catch (e) {
           console.error("Erro ao carregar carrinho persistente:", e);
-          // Fallback: se o banco cair, tentamos mostrar o que houver no local 
+          // Fallback: se o banco cair, tentamos mostrar o que houver no local
           // apenas para o usuário não ver um carrinho vazio por erro de rede.
           return JSON.parse(localStorage.getItem('ddm_cart') || '[]');
       }
@@ -61,7 +61,7 @@ export default function Layout({ children }) {
   });
 
   // 3. CÁLCULO TOTAL (Soma das quantidades de cada peça)
-  const totalCartItems = cartItems.reduce((sum, item) => 
+  const totalCartItems = cartItems.reduce((sum, item) =>
     sum + (Number(item.nu_quantidade || item.quantidade || 0)), 0
   );
 
@@ -91,19 +91,15 @@ export default function Layout({ children }) {
   const syncCartMutation = useMutation({
     mutationFn: async ({ id_usuario, localItems }) => {
         for (const item of localItems) {
-            await fetch('http://localhost:3001/api/carrinho', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  id_usuario: id_usuario,
-                  session_id: localStorage.getItem('ddm_session'), // OBRIGATÓRIO
-                  id_produto: item.id_produto,
-                  nu_quantidade: item.nu_quantidade || item.quantidade,
-                  nu_preco_unitario: item.nu_preco_unitario,
-                  ds_nome: item.ds_nome,
-                  nu_ddm: item.nu_ddm,
-                  url_imagem: item.url_imagem
-              })
+            await __ddmDatabase.entities.Carrinho.add({
+                id_usuario: id_usuario,
+                session_id: localStorage.getItem('ddm_session'),
+                id_produto: item.id_produto,
+                nu_quantidade: item.nu_quantidade || item.quantidade,
+                nu_preco_unitario: item.nu_preco_unitario,
+                ds_nome: item.ds_nome,
+                nu_ddm: item.nu_ddm,
+                url_imagem: item.url_imagem
             });
         }
         localStorage.removeItem('ddm_cart');

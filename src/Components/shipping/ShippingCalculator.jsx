@@ -34,7 +34,6 @@ export default function ShippingCalculator({
 
         try {
             // Nota: Se sua API Base já tiver '/api', ajuste aqui.
-            // Geralmente __ddmDatabase.BASE_URL é algo como 'http://localhost:3001/api'
             const response = await fetch(`${__ddmDatabase.BASE_URL}/frete/calcular`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
