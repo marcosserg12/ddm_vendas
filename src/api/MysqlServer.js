@@ -1,5 +1,5 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:3001/api';
-const IMG_BASE_URL = import.meta.env.VITE_IMG_URL || 'https://localhost:3001';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const IMG_BASE_URL = import.meta.env.VITE_IMG_URL || '';
 
 const apiRequest = async (endpoint, method = 'GET', data = null, formData = null) => {
     const token = localStorage.getItem('ddm_token');
