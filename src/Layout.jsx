@@ -151,19 +151,17 @@ useEffect(() => {
           <div className="flex items-center justify-between">
 
             {/* --- LOGO --- */}
-            <Link to="/" className="flex items-center gap-4 group">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-100 shadow-sm group-hover:border-orange-200 transition-colors">
-                  <img
-                    src={LogoDDM}
-                    alt="DDM Indústria"
-                    className="w-8 h-8 object-contain"
-                  />
-              </div>
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
+              <img
+                src={LogoDDM}
+                alt="DDM Indústria"
+                className="w-9 h-9 sm:w-11 sm:h-11 object-contain"
+              />
               <div className="flex flex-col justify-center leading-none">
-                <span className="text-xl font-black text-gray-900 uppercase tracking-tighter group-hover:text-orange-600 transition-colors">
+                <span className="text-base sm:text-xl font-black text-gray-900 uppercase tracking-tighter group-hover:text-orange-600 transition-colors">
                   DDM
                 </span>
-                <span className="text-[9px] text-gray-400 font-black uppercase tracking-[0.2em]">
+                <span className="hidden sm:block text-[9px] text-gray-400 font-black uppercase tracking-[0.2em]">
                   Indústria e Comércio
                 </span>
               </div>
@@ -369,9 +367,7 @@ useEffect(() => {
             {/* COLUNA 1: LOGO E SOBRE */}
             <div className="lg:col-span-2 space-y-6">
               <Link to="/" className="flex items-center gap-4 group w-fit">
-                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-100">
-                    <img src={LogoDDM} alt="DDM Logo" className="w-8 h-8 object-contain" />
-                 </div>
+                 <img src={LogoDDM} alt="DDM Logo" className="w-12 h-12 object-contain" />
                  <div className="flex flex-col justify-center leading-none">
                     <span className="text-2xl font-black text-white uppercase tracking-tighter">DDM</span>
                     <span className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em]">Indústria e Comércio</span>
@@ -432,12 +428,9 @@ useEffect(() => {
                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">
                     © {new Date().getFullYear()} DDM Indústria. Todos os direitos reservados.
                 </p>
-                <div className="flex items-center gap-6 opacity-40 grayscale hover:grayscale-0 transition-all">
-                    {/* Placeholder para bandeiras de cartão ou selos extras */}
-                    <div className="h-6 w-10 bg-gray-800 rounded"></div>
-                    <div className="h-6 w-10 bg-gray-800 rounded"></div>
-                    <div className="h-6 w-10 bg-gray-800 rounded"></div>
-                </div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-700">
+                    Fabricação 100% Nacional · Vespasiano-MG
+                </p>
             </div>
         </div>
       </footer>

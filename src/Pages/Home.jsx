@@ -35,29 +35,33 @@ const categories = [
     id: 1,
     name: "Sapatas",
     description: "Alta durabilidade para compactadores.",
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400&h=300&fit=crop",
+    image: "/sapata.png",
     icon: Cog,
+    imageClass: "scale-[1.25] origin-center",
   },
   {
     id: 2,
     name: "Coxins",
     description: "Amortecedores de vibração.",
-    image: "https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=400&h=300&fit=crop",
+    image: "/coxim.png",
     icon: Shield,
+    imageClass: "scale-[1.25] origin-center",
   },
   {
     id: 3,
     name: "Sanfonas",
     description: "Proteção para guias e fusos.",
-    image: "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=400&h=300&fit=crop",
+    image: "/sanfonas.png",
     icon: Wrench,
+    imageClass: "scale-[1.25] origin-center",
   },
   {
     id: 4,
     name: "Molas",
     description: "Molas industriais de borracha.",
-    image: "https://images.unsplash.com/photo-1537462715879-360eeb61a0ad?w=400&h=300&fit=crop",
+    image: "/molas.png",
     icon: Factory,
+    imageClass: "scale-[1.15] origin-center",
   },
 ];
 
@@ -136,8 +140,8 @@ export default function Home() {
             {categories.map((cat) => (
               <Link key={cat.id} to={`/catalogo?id_categoria=${cat.id}`} className="group h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <Card className="h-full border-none shadow-sm hover:shadow-xl transition-all duration-500 bg-white rounded-2xl md:rounded-[2rem] overflow-hidden relative isolate">
-                  <div className="relative h-32 md:h-64 overflow-hidden">
-                    <img src={cat.image} alt={cat.name} className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110" />
+                  <div className={`relative h-32 md:h-64 overflow-hidden ${cat.containerClass || ""}`}>
+                    <img src={cat.image} alt={cat.name} className={`w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 ${cat.imageClass || ""}`} />
                     <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-transparent to-transparent opacity-80" />
                     <div className="absolute top-2 right-2 md:top-4 md:right-4 bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-xl md:rounded-2xl shadow-lg group-hover:bg-orange-500 group-hover:border-orange-500 transition-colors duration-300">
                       <cat.icon className="w-3 h-3 md:w-5 md:h-5 text-white" />
@@ -283,17 +287,17 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="relative mt-8 lg:mt-0 hidden md:block">
-              <div className="relative rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl">
-                <img src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=800&auto=format&fit=crop" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity duration-500" alt="Engenharia" />
+            <div className="relative mt-8 lg:mt-0">
+              <div className="relative rounded-2xl lg:rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl h-56 sm:h-72 lg:h-auto">
+                <img src="/engenharia_sob_medida.avif" className="w-full h-full object-cover opacity-90 hover:opacity-100 transition-opacity duration-500" alt="Engenharia" />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-950/90 via-transparent to-transparent" />
               </div>
-              <div className="absolute -bottom-6 -left-4 bg-gray-900 p-6 rounded-2xl shadow-xl border border-white/10 flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-600 rounded-xl flex items-center justify-center text-white">
-                  <Factory className="w-6 h-6" />
+              <div className="absolute -bottom-4 -left-3 lg:-bottom-6 lg:-left-4 bg-gray-900 p-4 lg:p-6 rounded-xl lg:rounded-2xl shadow-xl border border-white/10 flex items-center gap-3 lg:gap-4">
+                <div className="w-9 h-9 lg:w-12 lg:h-12 bg-orange-600 rounded-lg lg:rounded-xl flex items-center justify-center text-white">
+                  <Factory className="w-5 h-5 lg:w-6 lg:h-6" />
                 </div>
                 <div>
-                  <p className="text-3xl font-black text-white leading-none tracking-tighter">100%</p>
+                  <p className="text-2xl lg:text-3xl font-black text-white leading-none tracking-tighter">100%</p>
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Nacional</p>
                 </div>
               </div>

@@ -23,14 +23,7 @@ export default function MobileDrawer({ isOpen, onClose, currentPageName, user, o
         {/* Header - Identidade Visual DDM */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-3">
-            {/* Container da Logo */}
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-gray-100 shadow-sm p-1">
-              <img
-                src={LogoDDM}
-                alt="DDM"
-                className="w-full h-full object-contain"
-              />
-            </div>
+            <img src={LogoDDM} alt="DDM" className="w-10 h-10 object-contain" />
             <div className="flex flex-col leading-none">
                 <span className="font-black text-gray-900 uppercase tracking-tighter text-lg">DDM</span>
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Menu</span>

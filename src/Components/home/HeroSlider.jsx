@@ -6,15 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Award,
-  Pause,
-  Play,
 } from "lucide-react";
 import { Button } from "../ui/button";
 
 const slides = [
   {
     id: 1,
-    image: "https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=1920&h=1080&fit=crop",
+    image: "/1.png",
     title: "Proteções Sanfonadas",
     subtitle: "Proteção para máquinas CNC",
     description: "Sanfonas de borracha para guias lineares e fusos de precisão.",
@@ -22,7 +20,7 @@ const slides = [
   },
   {
     id: 2,
-    image: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1920&h=1080&fit=crop",
+    image: "/2.png",
     title: "Sapatas Compactadoras",
     subtitle: "Alta durabilidade",
     description: "Fabricação nacional com os melhores elastômeros para compactação.",
@@ -30,7 +28,7 @@ const slides = [
   },
   {
     id: 3,
-    image: "https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=1920&h=1080&fit=crop",
+    image: "/3.png",
     title: "Coxins e Batentes",
     subtitle: "Isolamento de vibração",
     description: "Amortecedores de impacto que protegem a integridade dos equipamentos.",
@@ -38,20 +36,18 @@ const slides = [
   },
 ];
 
-const AUTOPLAY_DURATION = 6000;
+const AUTOPLAY_DURATION = 12000;
 
 export default function HeroSlider() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
 
   // Auto-play
   useEffect(() => {
-    if (!isPlaying) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, AUTOPLAY_DURATION);
     return () => clearInterval(timer);
-  }, [isPlaying]);
+  }, []);
 
   // Segurança para evitar crash
   const slideAtual = slides[currentSlide];
@@ -81,7 +77,7 @@ export default function HeroSlider() {
           <img
             src={slideAtual.image}
             alt={slideAtual.title}
-            className="w-full h-full object-cover opacity-40"
+            className="w-full h-full object-cover opacity-40 scale-[1.15] origin-center"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-gray-900 via-gray-900/80 to-transparent" />
         </motion.div>
@@ -183,7 +179,7 @@ export default function HeroSlider() {
                   idx === currentSlide ? "w-10 sm:w-16 bg-gray-700" : "w-2 bg-gray-600 hover:bg-gray-500"
                 }`}
               >
-                {idx === currentSlide && isPlaying && (
+                {idx === currentSlide && (
                   <motion.div
                     className="absolute inset-0 bg-orange-500 h-full"
                     initial={{ width: "0%" }}
@@ -194,20 +190,10 @@ export default function HeroSlider() {
                     }}
                   />
                 )}
-                {idx === currentSlide && !isPlaying && (
-                   <div className="absolute inset-0 bg-orange-500 h-full w-full" />
-                )}
               </button>
             ))}
           </div>
 
-          {/* Botão Play/Pause */}
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-all"
-          >
-            {isPlaying ? <Pause size={16} className="sm:w-5 sm:h-5" /> : <Play size={16} className="sm:w-5 sm:h-5" />}
-          </button>
 
         </div>
       </div>

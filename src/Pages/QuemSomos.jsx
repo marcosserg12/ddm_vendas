@@ -42,7 +42,7 @@ export default function QuemSomos() {
             <section className="relative bg-gray-900 py-20 md:py-32 overflow-hidden">
                 <div className="absolute inset-0">
                     <img
-                        src="https://images.unsplash.com/photo-1565043589221-1a6fd9ae45c7?w=1920"
+                        src="/quem_somos.jpg"
                         alt="Linha de Produção DDM"
                         className="w-full h-full object-cover opacity-20 md:opacity-10"
                     />
