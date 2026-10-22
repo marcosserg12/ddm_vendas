@@ -24,3 +24,8 @@ package-lock.json
 *.njsproj
 *.sln
 *.sw?
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
